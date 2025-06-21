@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                            String                  @id @default(cuid())
+  email                         String                  @unique
+  password                      String
+  firstName                     String?
+  lastName                      String?
+  role                          UserRole                @default(OPERATOR)
+  isActive                      Boolean                 @default(true)
+  createdAt                     DateTime                @default(now())
+  updatedAt                     DateTime                @updatedAt
+  auditLogs                     AuditLog[]              @relation("AuditLogUser")
+  processVersionsCreated        ProcessVersion[]        @relation("ProcessVersionCreatedBy")
+  createdProcesses              Process[]               @relation("ProcessCreatedBy")
+  productionLineVersionsCreated ProductionLineVersion[] @relation("ProductionLineVersionCreatedBy")
+  createdProductionLines        ProductionLine[]        @relation("ProductionLineCreatedBy")
+
+  @@map("users")
+}
+
+model ProductionLine {
+  id        String                  @id @default(cuid())
+  name      String
+  status    ProductionLineStatus    @default(ACTIVE)
+  version   Int                     @default(1)
+  isActive  Boolean                 @default(true)
+  parentId  String?
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  createdBy String
+  reason    String
+  processes Process[]
+  versions  ProductionLineVersion[] @relation("ProductionLineEntity")
+  creator   User                    @relation("ProductionLineCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("production_lines")
+}
+
+model Process {
+  id               String           @id @default(cuid())
+  title            String
+  description      String?
+  duration         Int?
+  progress         Float            @default(0.0)
+  status           ProcessStatus    @default(PENDING)
+  x                Float            @default(0.0)
+  y                Float            @default(0.0)
+  color            String           @default("#4F46E5")
+  version          Int              @default(1)
+  isActive         Boolean          @default(true)
+  parentId         String?
+  productionLineId String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  createdBy        String
+  reason           String
+  versions         ProcessVersion[] @relation("ProcessEntity")
+  creator          User             @relation("ProcessCreatedBy", fields: [createdBy], references: [id])
+  productionLine   ProductionLine   @relation(fields: [productionLineId], references: [id], onDelete: Cascade)
+
+  @@map("processes")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String
+  details    Json?
+  reason     String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  user       User     @relation("AuditLogUser", fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model ProductionLineVersion {
+  id        String               @id @default(cuid())
+  entityId  String
+  version   Int
+  name      String
+  status    ProductionLineStatus
+  createdAt DateTime             @default(now())
+  createdBy String
+  reason    String
+  creator   User                 @relation("ProductionLineVersionCreatedBy", fields: [createdBy], references: [id])
+  entity    ProductionLine       @relation("ProductionLineEntity", fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, version])
+  @@map("production_line_versions")
+}
+
+model ProcessVersion {
+  id               String        @id @default(cuid())
+  entityId         String
+  version          Int
+  title            String
+  description      String?
+  duration         Int?
+  progress         Float
+  status           ProcessStatus
+  x                Float
+  y                Float
+  color            String
+  productionLineId String
+  createdAt        DateTime      @default(now())
+  createdBy        String
+  reason           String
+  creator          User          @relation("ProcessVersionCreatedBy", fields: [createdBy], references: [id])
+  entity           Process       @relation("ProcessEntity", fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, version])
+  @@map("process_versions")
+}
+
+enum UserRole {
+  OPERATOR
+  MANAGER
+  ADMIN
+  QUALITY_ASSURANCE
+}
+
+enum ProductionLineStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum ProcessStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  WAITING
+  CANCELLED
+}

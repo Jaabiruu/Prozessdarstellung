@@ -1,0 +1,1 @@
+// User module barrel export - to be implemented in Phase 3
