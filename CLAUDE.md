@@ -1,107 +1,108 @@
-# CLAUDE.md
+# CLAUDE.md - REBUILD PROGRESS TRACKER
 
-AI assistance context for pharmaceutical production management system.
+AI assistance context for pharmaceutical production management system - **REBUILD IN PROGRESS**
 
-## 🎯 CURRENT STATUS
-**Phase**: ⚠️ TECHNICAL FOUNDATION COMPLETE - GxP COMPLIANCE INCOMPLETE  
-**Progress**: Technical implementation complete, P0 compliance requirements BLOCKING  
-**Next**: PRIORITY 0 GxP Compliance Implementation (MANDATORY)  
-**Deployment Gates**: Security Gate 1 ✅ | Performance Gate 2 ✅ | **Compliance Gate 3 ❌ BLOCKED**
+## 🚨 CURRENT REBUILD STATUS
+**Phase**: 🚧 **POST-INCIDENT STRATEGIC REBUILD**  
+**Progress**: 0% - Infrastructure Security Foundation Required  
+**Next**: PRIORITY 0.0 Infrastructure Automation (MANDATORY FIRST)  
+**Previous Code**: ❌ LOST - 20+ hours of implementation destroyed  
+**Rebuild Strategy**: ✅ ENHANCED with enterprise infrastructure security
 
-## ✅ COMPLETED PHASES
-- **Foundation**: GraphQL API, Authentication, Security, Audit Trail
-- **Work Package 6**: Transaction Support with comprehensive testing  
-- **Priority 1 Security**: JWT management, HTTPS enforcement, input sanitization
-- **Priority 2 Performance**: k6 testing, Redis caching, Elasticsearch archiving, DB optimization
+## 🛡️ INFRASTRUCTURE SECURITY FOUNDATION (P0.0 - IN PROGRESS)
+**Status**: ❌ NOT STARTED - HIGHEST PRIORITY  
+**Requirement**: Eliminate manual operations to prevent future code loss
 
-## 🚨 CURRENT STATE
-**Security**: ✅ TECHNICAL BASELINE COMPLETE - SecurityService, Helmet, pharmaceutical validators  
-**Scalability**: ✅ TECHNICAL BASELINE COMPLETE - Redis caching, Elasticsearch archiving, connection pooling  
-**Performance**: ✅ VALIDATED - 100+ users, P95 < 200ms, comprehensive monitoring  
-**GxP Compliance**: ❌ **INCOMPLETE - BLOCKING PRODUCTION DEPLOYMENT**  
-**Architecture**: ⏳ OPTIONAL - @Global() coupling exists but functional
+### P0.0 Implementation Checklist
+- [ ] **GitHub Actions CI/CD Pipeline**: Automated deployments, no manual server access
+- [ ] **Infrastructure as Code**: Docker compositions version-controlled
+- [ ] **Branch Protection Rules**: Master branch protection, require PRs
+- [ ] **Automated Environment Recreation**: Complete environment from git only
+- [ ] **Zero Manual Operations Policy**: Technical prevention of manual server manipulation
 
-## 🚨 PRIORITY 0 - BLOCKING COMPLIANCE REQUIREMENTS
-**❌ MANDATORY for Pharmaceutical Production Deployment**
+## 📋 REBUILD PHASES (PENDING P0.0 COMPLETION)
 
-1. **P0.1: Data Versioning** - Immutable historical records (prevents data overwrites)
-2. **P0.2: Complete Audit Trail** - Mandatory "Why" capture for all mutations  
-3. **P0.3: GxP-Compliant RBAC** - Four-Eyes Principle and QUALITY_ASSURANCE role
-4. **P0.4: Electronic Signatures** - 21 CFR Part 11 compliance implementation
+### ❌ Phase 1: Project Foundation (NOT STARTED)
+- [ ] apps/backend directory structure
+- [ ] package.json with NestJS dependencies
+- [ ] TypeScript configuration (strict mode)
+- [ ] ESLint, Prettier configuration
+- [ ] Docker infrastructure (PostgreSQL, Redis, Elasticsearch)
 
-## 🔄 OPTIONAL TASKS (Priority 3 - LOW - AFTER P0 COMPLETION)
-1. **Event-Driven Architecture** - Replace @Global() with EventEmitter pattern
-2. **Microservices Prep** - Module decomposition for future scaling
-3. **Advanced Monitoring** - OpenTelemetry integration
-4. **API Gateway** - Rate limiting and API versioning
+### ❌ Phase 2: Database & Prisma (NOT STARTED) 
+- [ ] Prisma schema with core models
+- [ ] GxP data versioning schema (ProcessVersion, ProductionLineVersion)
+- [ ] Database migrations and seeding
+- [ ] Version-controlled schema evolution
 
-## 🛠️ COMPLETE IMPLEMENTATION STACK
-### Security Layer
-- `SecurityService` - JWT secret validation, production warnings
-- `pharmaceutical.validators.ts` - XSS/SQL injection prevention
-- Helmet CSP - Script, frame, object blocking
-- Enhanced DTOs - All inputs use `@IsPharmaceuticalSafe()`
+### ❌ Phase 3: Core Services (NOT STARTED)
+- [ ] Prisma service with optimized connections
+- [ ] Audit service with transaction support
+- [ ] Authentication system (JWT + RBAC)
+- [ ] Authorization guards and decorators
+- [ ] User management service
 
-### Performance Layer
-- `CacheService` - Redis caching with intelligent invalidation
-- `AuditArchiveService` - Elasticsearch tiered storage
-- `DatabaseMonitoringService` - Connection pool and query tracking
-- `MonitoringService` - Application-level metrics
+### ❌ Phase 4: Production Entities (NOT STARTED)
+- [ ] ProductionLine service with versioning
+- [ ] Process service with pharmaceutical workflows
+- [ ] GraphQL resolvers with DataLoader optimization
+- [ ] Complete CRUD operations with audit trail
 
-### Infrastructure
-- **PostgreSQL** - Primary database with connection pooling
-- **Redis** - Caching layer with LRU eviction
-- **Elasticsearch** - Audit log archiving and search
-- **k6** - Performance testing framework
+### ❌ Phase 5: Performance & Security (NOT STARTED)
+- [ ] Redis caching with intelligent invalidation
+- [ ] Database monitoring and optimization
+- [ ] Audit archiving (PostgreSQL → Elasticsearch)
+- [ ] Security headers and input sanitization
+- [ ] Application monitoring and metrics
 
-## 🚀 Quick Commands
-```bash
-# Setup (Complete Infrastructure)
-docker-compose up -d  # Starts PostgreSQL, Redis, Elasticsearch
-cd apps/backend && npm install
-npx prisma migrate dev && npm run seed
+### ❌ Phase 6: Testing Infrastructure (NOT STARTED)
+- [ ] Jest configuration and test utilities
+- [ ] Authentication tests (33 tests target)
+- [ ] Audit trail tests (21 tests target) 
+- [ ] GraphQL API tests (31 tests target)
+- [ ] Integration and E2E test suites
 
-# Development  
-npm run start:dev  # http://localhost:3000/graphql
-admin@pharma.local / Admin123!
+### ❌ Phase 7: Performance Testing (NOT STARTED)
+- [ ] k6 performance framework
+- [ ] Load testing scenarios (100+ users target)
+- [ ] Performance validation (P95 < 200ms target)
+- [ ] Cache performance testing
 
-# Testing
-npm run test:e2e          # All integration tests
-npm run test:performance  # k6 load testing suite
+### ❌ Phase 8: GxP Compliance (NOT STARTED)
+- [ ] **P0.1**: Data versioning service (immutable records)
+- [ ] **P0.2**: Complete audit trail (mandatory "Why" parameter)
+- [ ] **P0.3**: ApprovalWorkflowService & QUALITY_ASSURANCE role
+- [ ] **P0.4**: Electronic signatures (21 CFR Part 11)
 
-# Monitoring
-curl http://localhost:3000/metrics         # Application metrics
-curl http://localhost:3000/database/metrics # Database metrics
-```
+## 🎯 REFERENCE SPECIFICATIONS
+- **CLAUDE_SPECIFICATION.md**: Original system specification (20+ hours of work)
+- **DEVELOPMENT_GUIDE_SPECIFICATION.md**: Original development workflows
+- **COMPREHENSIVE_REBUILD_TODO.md**: Complete rebuild checklist (150+ items)
+- **COMPLIANCE-FIRST-PLAN.md**: Enhanced compliance plan with infrastructure security
 
-## 🏗️ Complete Tech Stack
-**Core**: NestJS v11 + PostgreSQL + Prisma + GraphQL + JWT RBAC  
-**Security**: Helmet, sanitize-html, pharmaceutical validators  
-**Performance**: Redis caching, Elasticsearch archiving, k6 testing  
-**Monitoring**: Custom metrics, database monitoring, health checks  
-**Models**: User, ProductionLine, Process, AuditLog (with archiving)
+## 📊 REBUILD METRICS
+**Total Items**: ~150+ major implementation items  
+**Completed**: 0 items  
+**Current Progress**: 0.0%  
+**Infrastructure Security**: ❌ Not implemented  
+**Code Foundation**: ❌ Not started  
+**GxP Compliance**: ❌ Pending foundation completion
 
-## ⚠️ CRITICAL COMPLIANCE GAPS
-- **Data Integrity Violation**: Records overwritten via UPDATE operations (violates GxP)
-- **Incomplete Audit Trail**: Missing mandatory "Why" parameter for mutations
-- **Inadequate RBAC**: Missing QUALITY_ASSURANCE role and Four-Eyes Principle
-- **No Electronic Signatures**: 21 CFR Part 11 compliance mechanism missing
+## 🚀 IMMEDIATE NEXT ACTIONS
+1. **YOU**: Run git commands to commit this progress tracker
+2. **INFRASTRUCTURE FIRST**: Implement P0.0 infrastructure security
+3. **Foundation**: Begin Phase 1 project structure rebuild
+4. **Verification**: Compare rebuilt system against specifications
 
-## ⚠️ KNOWN TECHNICAL ISSUES
-- Unit tests failing due to pharmaceutical validators (E2E tests working)
-- @Global() pattern for AuditModule (works but not ideal architecture)
-- Default JWT secret warning in development (by design)
+## ⚠️ CRITICAL REMINDERS
+- **NO GIT OPERATIONS**: Claude is banned from all git commands
+- **INFRASTRUCTURE FIRST**: P0.0 must be completed before any code development
+- **SAFETY PROTOCOL**: Frequent commits after every major milestone
+- **VERIFICATION**: Check GitHub after every commit to ensure files exist
 
-## 🎯 DEPLOYMENT READINESS
-**Gate 1**: ✅ PASSED - Technical security baseline achieved  
-**Gate 2**: ✅ PASSED - Performance validated (100+ users, P95 < 200ms)  
-**Gate 3**: ❌ **BLOCKED - GxP Compliance Verification MANDATORY**
+---
 
-**⚠️ PRODUCTION DEPLOYMENT**: **BLOCKED** until P0 compliance requirements complete
-**Regulatory Risk**: **UNACCEPTABLE** for pharmaceutical environment
-
-## 📊 PRODUCTION METRICS
-- **Load Capacity**: 100+ concurrent users validated
-- **Response Time**: P95 < 200ms, P99 < 500ms achieved
-- **Cache Performance**: >70% hit rate for common queries
-- **Audit Compliance**: 7-year retention with search capability
+**Last Updated**: June 21, 2025  
+**Status**: 🚧 STRATEGIC REBUILD IN PROGRESS  
+**Risk Level**: 🔴 HIGH - No infrastructure automation yet  
+**Next Milestone**: P0.0 Infrastructure Security Foundation
