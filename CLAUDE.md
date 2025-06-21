@@ -31,6 +31,9 @@ AI assistance context for pharmaceutical production management system - **REBUIL
 - [x] Main NestJS application module
 - [x] Health check endpoints
 - [x] Environment configuration
+- [x] **Enterprise Configuration Standards**: readonly interfaces, union types, secure JWT handling
+- [x] **Modular Architecture**: Proper dependency injection and barrel exports
+- [x] **Type Safety**: Comprehensive interfaces and computed properties
 
 ### ❌ Phase 2: Database & Prisma (NOT STARTED) 
 - [ ] Prisma schema with core models
@@ -85,10 +88,11 @@ AI assistance context for pharmaceutical production management system - **REBUIL
 
 ## 📊 REBUILD METRICS
 **Total Items**: ~150+ major implementation items  
-**Completed**: 8 items (Phase 1)  
-**Current Progress**: 10.0%  
+**Completed**: 11 items (Phase 1 + Enterprise Standards)  
+**Current Progress**: 12.0%  
 **Infrastructure Security**: ❌ Not implemented  
-**Code Foundation**: ✅ Phase 1 Complete  
+**Code Foundation**: ✅ Phase 1 Complete + Enterprise Standards  
+**Enterprise Standards**: ✅ Established and Implemented  
 **GxP Compliance**: ❌ Pending foundation completion
 
 ## 🚀 IMMEDIATE NEXT ACTIONS
@@ -97,11 +101,48 @@ AI assistance context for pharmaceutical production management system - **REBUIL
 3. **Prisma Schema**: Create core models for pharmaceutical system
 4. **Data Versioning**: Implement GxP-compliant versioning schema
 
+## 🏗️ ENTERPRISE CODING STANDARDS
+
+**Established**: June 21, 2025 - **MANDATORY for all development phases**
+
+### 1. Immutability & Configuration Security
+- **`readonly` Properties**: All interface properties MUST be readonly to prevent mutation
+- **Sensitive Data Protection**: JWT secrets and credentials MUST use class-based config with `toJSON()` redaction
+- **No Hardcoded Secrets**: All sensitive values through environment variables only
+
+### 2. Type Safety Requirements
+- **Union Types Over Strings**: Use specific union types (`'development' | 'production' | 'test'`) instead of generic `string`
+- **Compile-Time Safety**: Leverage TypeScript's type system to catch errors at compile time
+- **IDE Autocompletion**: Types must provide meaningful autocomplete suggestions
+
+### 3. Consistency & Derived Properties
+- **Single Source of Truth**: Store only base values, compute derived properties via getters
+- **No Redundant State**: Avoid storing `isDevelopment`/`isProduction` alongside `nodeEnv`
+- **Computed Values**: Use getter methods for derived state to prevent inconsistencies
+
+### 4. Class vs Interface Guidelines
+- **Interfaces**: For data structures and contracts (readonly data)
+- **Classes**: When you need methods, computed properties, or custom serialization
+- **Security Rule**: Use classes for any config containing sensitive data
+
+### 5. Code Structure Principles
+- **Barrel Exports**: Every module must have `index.ts` for clean imports
+- **Separation of Concerns**: Single responsibility per service/module
+- **Dependency Injection**: Use NestJS DI pattern, avoid direct instantiation
+
+### 6. Error Handling Standards
+- **Fail Fast**: Use `getOrThrow()` for required configuration
+- **Meaningful Errors**: Provide context in error messages
+- **Graceful Degradation**: Handle non-critical failures gracefully
+
+**Enforcement**: These standards apply to ALL phases - any code not meeting these requirements will be refactored
+
 ## ⚠️ CRITICAL REMINDERS
 - **NO GIT OPERATIONS**: Claude is banned from all git commands
 - **INFRASTRUCTURE FIRST**: P0.0 must be completed before any code development
 - **SAFETY PROTOCOL**: Frequent commits after every major milestone
 - **VERIFICATION**: Check GitHub after every commit to ensure files exist
+- **ENTERPRISE STANDARDS**: All code MUST follow the established coding standards above
 
 ---
 
