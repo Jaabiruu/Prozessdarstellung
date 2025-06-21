@@ -393,6 +393,11 @@ it('should work', async () => {
 - [ ] All tests follow AAA pattern (Arrange, Act, Assert)
 - [ ] No hardcoded secrets or configuration values
 - [ ] Error handling provides meaningful context without exposing internals
+- [ ] Health checks use `HealthCheckError` and proper Terminus patterns
+- [ ] Environment variables validated on startup with clear error messages
+- [ ] Global modules documented with architectural justification
+- [ ] Logging follows structured patterns with appropriate levels
+- [ ] No log spam from successful routine operations
 
 **Enforcement**: Any code not meeting these standards will be rejected in code review and must be refactored before merge.
 
@@ -706,6 +711,157 @@ const complianceMonitoring = {
 ```
 
 **Final Enforcement Rule**: No code reaches production without passing ALL governance, security, and compliance validations. Any attempt to bypass these controls must be documented as a formal deviation with executive approval and regulatory risk assessment.
+
+### 14. Health Check & Monitoring Standards
+
+#### Health Check Implementation Patterns
+| DO ✅ | DON'T ❌ |
+|-------|----------|
+| Use `HealthCheckError` for health check failures | Throw generic `Error` in health checks |
+| Let Terminus framework handle HTTP error responses | Manually throw errors that override Terminus |
+| Implement real connectivity tests (ping, query) | Use configuration-only checks |
+| Log only failures and errors | Log every successful health check |
+| Return structured status objects | Return boolean or generic responses |
+
+```typescript
+// ✅ DO: Proper Terminus health check pattern
+async checkDatabase(): Promise<HealthIndicatorResult> {
+  const key = 'database';
+  try {
+    await this.databaseService.ping(); // Real connectivity test
+    return this.getStatus(key, true, { responseTime: '15ms' });
+  } catch (error) {
+    this.logger.error(`${key} health check failed`, error.stack);
+    throw new HealthCheckError('Database connection failed', 
+      this.getStatus(key, false, { message: error.message }));
+  }
+}
+
+// ❌ DON'T: Anti-pattern with manual error handling
+async checkDatabase(): Promise<HealthIndicatorResult> {
+  try {
+    const isConfigured = !!this.config.databaseUrl; // Config-only check
+    if (!isConfigured) {
+      throw new Error('Database not configured'); // Generic throw
+    }
+    this.logger.log('Database health check passed'); // Log spam
+    return this.getStatus('database', true);
+  } catch (error) {
+    throw new Error('Health check failed'); // Loses context
+  }
+}
+```
+
+#### Environment-Based Security Configuration
+| DO ✅ | DON'T ❌ |
+|-------|----------|
+| Load all secrets from environment variables | Hardcode any secrets in source code |
+| Validate required environment variables on startup | Discover missing config at runtime |
+| Use bracket notation for environment access | Use dot notation that may not exist |
+| Provide clear error messages for missing config | Fail silently or with generic errors |
+| Document environment variables in .env.example | Leave configuration undocumented |
+
+```typescript
+// ✅ DO: Secure environment-based configuration
+export class SecureConfig {
+  readonly jwtSecret: string;
+  readonly adminPassword: string;
+
+  constructor() {
+    this.jwtSecret = this.getRequiredEnv('JWT_SECRET');
+    this.adminPassword = this.getRequiredEnv('DEFAULT_ADMIN_PASSWORD');
+  }
+
+  private getRequiredEnv(key: string): string {
+    const value = process.env[key];
+    if (!value) {
+      throw new Error(`Required environment variable ${key} is not set. Check .env.example for guidance.`);
+    }
+    return value;
+  }
+
+  toJSON() {
+    return {
+      jwtSecret: '[REDACTED]',
+      adminPassword: '[REDACTED]',
+    };
+  }
+}
+
+// ❌ DON'T: Insecure configuration patterns
+export class InsecureConfig {
+  jwtSecret = 'hardcoded-secret'; // Hardcoded secret
+  adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123'; // Default fallback
+  
+  // No toJSON override - secrets will be logged
+}
+```
+
+#### Global Module Architecture Patterns
+| DO ✅ | DON'T ❌ |
+|-------|----------|
+| Use `@Global()` for truly universal services | Make every module global |
+| Document architectural trade-offs explicitly | Use global modules without justification |
+| Apply global pattern consistently | Mix global and explicit import patterns |
+| Consider dependency visibility implications | Ignore hidden dependency issues |
+
+```typescript
+// ✅ DO: Justified global module for universal service
+/**
+ * Global Database Module
+ * 
+ * ARCHITECTURAL DECISION: This module is global because:
+ * - Database access is required by 90%+ of feature modules
+ * - Reduces boilerplate across the application
+ * - Centralizes connection management
+ * 
+ * TRADE-OFF: Less explicit dependencies, but acceptable for foundational services
+ */
+@Global()
+@Module({
+  providers: [PrismaService],
+  exports: [PrismaService],
+})
+export class DatabaseModule {}
+
+// ❌ DON'T: Unjustified global module
+@Global() // No justification provided
+@Module({
+  providers: [EmailService], // Not universally needed
+  exports: [EmailService],
+})
+export class EmailModule {} // Should be explicitly imported where needed
+```
+
+#### Log Management & Monitoring
+| DO ✅ | DON'T ❌ |
+|-------|----------|
+| Log failures, errors, and significant events | Log routine successful operations |
+| Use structured logging with context | Use simple string messages |
+| Include stack traces for debugging | Log only error messages |
+| Set appropriate log levels | Use same level for all logs |
+| Sanitize sensitive data in logs | Log raw user data or secrets |
+
+```typescript
+// ✅ DO: Structured logging with appropriate levels
+this.logger.error('Database operation failed', {
+  operation: 'createUser',
+  userId: user.id,
+  error: error.message,
+  stack: error.stack,
+  timestamp: new Date().toISOString(),
+});
+
+this.logger.debug('Database query executed', {
+  query: 'SELECT COUNT(*) FROM users',
+  duration: '15ms',
+});
+
+// ❌ DON'T: Poor logging practices
+this.logger.log('Health check passed'); // Creates log noise
+this.logger.error(`Error: ${error}`); // No context
+console.log('User data:', userData); // May expose sensitive info
+```
 
 ## ⚠️ CRITICAL REMINDERS
 - **NO GIT OPERATIONS**: Claude is banned from all git commands
