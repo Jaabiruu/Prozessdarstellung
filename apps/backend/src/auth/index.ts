@@ -1,1 +1,9 @@
-// Auth module barrel export - to be implemented in Phase 3
+export * from './auth.module';
+export * from './auth.service';
+export * from './auth.resolver';
+export * from './guards/jwt-auth.guard';
+export * from './guards/roles.guard';
+export * from './interfaces/jwt-payload.interface';
+export * from './dto/login.input';
+export * from './dto/auth-response.dto';
+export * from './strategies/jwt.strategy';

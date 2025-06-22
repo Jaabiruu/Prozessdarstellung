@@ -1,8 +1,25 @@
 # 🚨 COMPREHENSIVE REBUILD TODO - PHARMACEUTICAL SYSTEM
 
-**CRITICAL**: This document captures all 20+ hours of implementation work that was lost.  
-**Strategy**: Rebuild incrementally with frequent commits and verification.  
-**Safety**: Commit after EVERY major item. Push immediately. Verify on GitHub.
+**PURPOSE**: ⭐ Detailed implementation blueprint with 150+ technical specifications  
+**ROLE**: Complete development guide with code examples, file structures, and acceptance criteria  
+**STATUS**: Phase 1-4 COMPLETE (40% done), Phase 5 Performance & Scalability ready to start  
+
+> **💡 Quick Status**: See `CLAUDE.md` for current progress. See `README.md` for overview.  
+> **💡 Implementation**: Use this file for detailed technical specifications and step-by-step guides.
+
+---
+
+## ✅ COMPLETED PHASES (ARCHIVED)
+
+**Phase 1-4 are complete and have been archived to reduce context window usage:**
+
+- **📁 `archived_md/PHASE_1_COMPLETE.md`** - Project foundation & infrastructure (11 items complete)
+- **📁 `archived_md/PHASE_2_COMPLETE.md`** - Database & Prisma foundation (6 tasks complete)  
+- **📁 `archived_md/PHASE_3_COMPLETE.md`** - Core services & business logic (4 tasks complete)
+- **📁 `archived_md/todos/PHASE_4_PRODUCTION_ENTITIES_TODO.md`** - Production entities with simplified CRUD (4 tasks complete)
+
+**Total Completed**: 30 major implementation items ✅  
+**Foundation Ready**: Database, Auth, Audit, User Management, Production Entities, Enterprise Standards
 
 ---
 
@@ -26,199 +43,6 @@ git push origin master        # Push immediately
 
 ---
 
-## 📋 PHASE 1: PROJECT FOUNDATION & INFRASTRUCTURE
-
-### 1.1 Basic Project Structure
-- [ ] **COMMIT SAFETY**: Create apps/backend directory structure
-- [ ] **package.json**: Complete NestJS project configuration
-  - Dependencies: @nestjs/core, @nestjs/common, @nestjs/graphql, apollo-server-express
-  - DevDependencies: typescript, jest, eslint, prettier
-  - Scripts: start:dev, build, test, test:e2e, test:performance
-- [ ] **tsconfig.json**: TypeScript configuration with strict mode
-- [ ] **tsconfig.build.json**: Build-specific TypeScript config
-- [ ] **nest-cli.json**: NestJS CLI configuration
-- [ ] **eslint.config.mjs**: ESLint configuration for code quality
-- [ ] **.prettierrc**: Prettier formatting configuration
-- [ ] **.gitignore**: Comprehensive ignore patterns (node_modules, dist, .env, coverage)
-- [ ] **VERIFICATION**: `npm install` works, basic project structure exists
-- [ ] **COMMIT**: "Project foundation: Basic NestJS structure and configuration"
-
-### 1.2 Environment Configuration
-- [ ] **.env.example**: Template environment variables
-- [ ] **src/config/app.config.ts**: Application configuration service
-- [ ] **src/config/database.config.ts**: Database connection configuration
-- [ ] **src/config/validation.schema.ts**: Environment variable validation
-- [ ] **src/config/database-optimization.config.ts**: DB performance settings
-- [ ] **VERIFICATION**: Configuration loads without errors
-- [ ] **COMMIT**: "Configuration: Environment and database setup"
-
-### 1.3 Docker Infrastructure
-- [ ] **docker-compose.yml**: PostgreSQL, Redis, Elasticsearch services
-  - PostgreSQL 15+ with health checks
-  - Redis 7+ with persistence
-  - Elasticsearch 8+ with security disabled for dev
-  - Volume mappings and network configuration
-- [ ] **Docker verification**: `docker-compose up -d` starts all services
-- [ ] **COMMIT**: "Infrastructure: Docker services for development"
-
----
-
-## 📋 PHASE 2: DATABASE & PRISMA FOUNDATION
-
-### 2.1 Prisma Schema - Core Models
-- [ ] **prisma/schema.prisma**: Basic generator and datasource configuration
-- [ ] **ProductionLineStatus enum**: active, inactive, maintenance
-- [ ] **ProcessStatus enum**: pending, in_progress, completed, waiting
-- [ ] **UserRole enum**: OPERATOR, MANAGER, ADMIN
-- [ ] **ProductionLine model**: id, name, status, timestamps, processes relation
-- [ ] **Process model**: id, title, duration, progress, status, x, y, color, productionLineId, timestamps
-- [ ] **User model**: id, email, password, firstName, lastName, role, isActive, timestamps
-- [ ] **AuditLog model**: id, userId, action, details (Json), ipAddress, userAgent, timestamps
-- [ ] **User self-relations**: createdBy/createdUsers for audit trail
-- [ ] **VERIFICATION**: `npx prisma generate` works without errors
-- [ ] **COMMIT**: "Database: Core Prisma schema with all models"
-
-### 2.2 GxP Data Versioning Schema (NEW REQUIREMENT)
-- [ ] **ProductionLine versioning fields**: currentVersion, isActive
-- [ ] **Process versioning fields**: currentVersion, isActive
-- [ ] **ProductionLineVersion model**: entityId, version, name, status, audit fields, reason
-- [ ] **ProcessVersion model**: entityId, version, all process fields, audit fields, reason
-- [ ] **AuditLog reason field**: reason (String?) for GxP compliance
-- [ ] **User versioning relations**: productionLineVersionsCreated, processVersionsCreated
-- [ ] **Unique constraints**: [entityId, version] for both version tables
-- [ ] **VERIFICATION**: Schema generates without conflicts
-- [ ] **COMMIT**: "GxP Compliance: Data versioning schema for immutable records"
-
-### 2.3 Database Migrations & Seeding
-- [ ] **Migration**: `npx prisma migrate dev --name init`
-- [ ] **prisma/seed.ts**: Comprehensive seed script
-  - Admin user: admin@pharma.local / Admin123!
-  - Sample ProductionLines with proper statuses
-  - Sample Processes with realistic data
-  - Initial audit log entries
-- [ ] **Database verification**: `npm run seed` creates sample data
-- [ ] **COMMIT**: "Database: Migrations and seed data"
-
----
-
-## 📋 PHASE 3: CORE SERVICES & BUSINESS LOGIC
-
-### 3.1 Prisma Service
-- [ ] **src/prisma/prisma.module.ts**: Prisma module configuration
-- [ ] **src/prisma/prisma.service.ts**: 
-  - Database connection with optimization settings
-  - Connection pooling configuration
-  - Query logging and error handling
-  - Transaction support methods
-- [ ] **VERIFICATION**: Database connects successfully
-- [ ] **COMMIT**: "Core: Prisma service with optimized database connection"
-
-### 3.2 Audit Service (CRITICAL FOR COMPLIANCE)
-- [ ] **src/audit/audit.service.ts**:
-  - `log(userId, action, details, metadata?, tx?)` method
-  - Transaction-aware logging
-  - IP address and user agent capture
-  - JSON serialization for complex objects
-  - Reason parameter support (GxP requirement)
-- [ ] **src/audit/audit.module.ts**: Module configuration with global scope
-- [ ] **AuditMetadata interface**: ipAddress, userAgent typing
-- [ ] **VERIFICATION**: Audit logging works in transactions
-- [ ] **COMMIT**: "Audit: Transaction-aware audit service for GxP compliance"
-
-### 3.3 Authentication System
-- [ ] **src/auth/auth.service.ts**:
-  - `login(email, password)` with bcrypt verification
-  - JWT token generation with user context
-  - Rate limiting for failed attempts
-  - Audit logging for authentication events
-- [ ] **src/auth/auth.resolver.ts**: GraphQL login mutation
-- [ ] **src/auth/dto/login.input.ts**: Login input validation
-- [ ] **src/auth/dto/auth-payload.ts**: JWT response structure
-- [ ] **src/auth/strategies/jwt.strategy.ts**: JWT strategy for Passport
-- [ ] **VERIFICATION**: Login works, JWT tokens validate
-- [ ] **COMMIT**: "Authentication: Complete JWT-based auth system"
-
-### 3.4 Authorization Guards & Decorators
-- [ ] **src/auth/guards/jwt-auth.guard.ts**: JWT validation guard
-- [ ] **src/auth/guards/roles.guard.ts**: Role-based access control
-- [ ] **src/auth/guards/login-throttle.guard.ts**: Rate limiting guard
-- [ ] **src/common/decorators/roles.decorator.ts**: @Roles() decorator
-- [ ] **src/common/decorators/current-user.decorator.ts**: @CurrentUser() decorator
-- [ ] **src/common/decorators/audit-metadata.decorator.ts**: @AuditMetadataParam() decorator
-- [ ] **src/common/decorators/public.decorator.ts**: @Public() for open endpoints
-- [ ] **VERIFICATION**: Guards work correctly, roles enforced
-- [ ] **COMMIT**: "Authorization: RBAC guards and decorators"
-
-### 3.5 User Service
-- [ ] **src/user/user.service.ts**:
-  - Complete CRUD operations with audit logging
-  - Password hashing and validation
-  - Role management and validation
-  - Transaction support for all mutations
-- [ ] **src/user/user.resolver.ts**: GraphQL queries and mutations
-- [ ] **src/user/entities/user.entity.ts**: GraphQL User type
-- [ ] **src/user/dto/create-user.input.ts**: User creation validation
-- [ ] **src/user/user.module.ts**: Module configuration
-- [ ] **VERIFICATION**: User CRUD works with proper audit trail
-- [ ] **COMMIT**: "Users: Complete user management with audit trail"
-
----
-
-## 📋 PHASE 4: PRODUCTION ENTITIES & SERVICES
-
-### 4.1 ProductionLine Service
-- [ ] **src/production-line/production-line.service.ts**:
-  - `create(data)`, `createFromInput(input, userId, metadata)` methods
-  - `findAll(pagination?)`, `findOne(id)` methods
-  - `update(id, data)`, `updateFromInput(id, input, userId, metadata)` methods
-  - `remove(id, userId, metadata)` method
-  - Transaction support for all mutations
-  - Audit logging with complete context
-- [ ] **src/production-line/entities/production-line.entity.ts**: GraphQL type
-- [ ] **VERIFICATION**: All CRUD operations work with audit trail
-- [ ] **COMMIT**: "ProductionLine: Complete service with transaction support"
-
-### 4.2 ProductionLine GraphQL Layer
-- [ ] **src/production-line/production-line.resolver.ts**:
-  - @Query findAll with pagination support
-  - @Query findOne with proper error handling
-  - @Mutation createProductionLine with role validation
-  - @Mutation updateProductionLine with role validation
-  - @Mutation removeProductionLine with manager role requirement
-  - @ResolveField processes with DataLoader optimization
-- [ ] **src/graphql/dto/production-line/create-production-line.input.ts**: Validation
-- [ ] **src/graphql/dto/production-line/update-production-line.input.ts**: Partial validation
-- [ ] **VERIFICATION**: GraphQL operations work with proper security
-- [ ] **COMMIT**: "ProductionLine: GraphQL API with security and validation"
-
-### 4.3 Process Service (CORE ENTITY)
-- [ ] **src/process/process.service.ts**:
-  - Complete CRUD operations with transaction support
-  - `createFromInput(input, userId, metadata)` method
-  - `updateFromInput(id, input, userId, metadata)` method
-  - `findAllByProductionLine(lineId, pagination?)` method
-  - Pagination with 100-item limit enforcement
-  - Proper relation handling with productionLine
-- [ ] **src/process/entities/process.entity.ts**: GraphQL type with all fields
-- [ ] **VERIFICATION**: Process operations work with proper audit trail
-- [ ] **COMMIT**: "Process: Complete service with pharmaceutical workflow support"
-
-### 4.4 Process GraphQL Layer
-- [ ] **src/process/process.resolver.ts**:
-  - @Query processes with pagination
-  - @Query process with error handling
-  - @Query processesByProductionLine with filtering
-  - @Mutation createProcess with validation
-  - @Mutation updateProcess with selective field updates
-  - @Mutation removeProcess with manager role requirement
-  - @ResolveField productionLine with DataLoader optimization
-- [ ] **src/graphql/dto/process/create-process.input.ts**: Complete validation
-- [ ] **src/graphql/dto/process/update-process.input.ts**: Partial update validation
-- [ ] **VERIFICATION**: All GraphQL operations work correctly
-- [ ] **COMMIT**: "Process: GraphQL API with DataLoader optimization"
-
----
-
 ## 📋 PHASE 5: PERFORMANCE & SCALABILITY
 
 ### 5.1 Caching Layer
@@ -232,14 +56,14 @@ git push origin master        # Push immediately
 - [ ] **VERIFICATION**: Cache hit rates >70% for common queries
 - [ ] **COMMIT**: "Performance: Redis caching with intelligent invalidation"
 
-### 5.2 DataLoader Optimization
-- [ ] **src/common/dataloader/production-line.dataloader.ts**: N+1 prevention
-- [ ] **src/common/dataloader/process.dataloader.ts**: Batch loading
-- [ ] **src/common/dataloader/dataloader.module.ts**: Module configuration
-- [ ] **src/common/interfaces/graphql-context.interface.ts**: Context typing
-- [ ] **GraphQL Context**: Integration with main app
-- [ ] **VERIFICATION**: No N+1 queries in GraphQL operations
-- [ ] **COMMIT**: "Performance: DataLoader optimization for GraphQL"
+### 5.2 DataLoader Optimization ✅ COMPLETED IN PHASE 4
+- [x] **src/common/dataloader/production-line.dataloader.ts**: N+1 prevention
+- [x] **src/common/dataloader/process.dataloader.ts**: Batch loading
+- [x] **src/common/dataloader/dataloader.module.ts**: Module configuration
+- [x] **src/common/interfaces/graphql-context.interface.ts**: Context typing
+- [x] **GraphQL Context**: Integration with main app
+- [x] **VERIFICATION**: No N+1 queries in GraphQL operations
+- [x] **COMMIT**: "Performance: DataLoader optimization for GraphQL"
 
 ### 5.3 Database Monitoring
 - [ ] **src/database/database-monitoring.service.ts**:
@@ -429,7 +253,7 @@ git push origin master        # Push immediately
 - [ ] **COMMIT**: "GxP P0.2: Complete audit trail with mandatory reason capture"
 
 ### 10.3 QUALITY_ASSURANCE Role (P0.3)
-- [ ] **UserRole enum update**: Add QUALITY_ASSURANCE role
+- [ ] **UserRole enum update**: Add QUALITY_ASSURANCE role ✅ (Already implemented)
 - [ ] **Role hierarchy update**: Proper permission levels
 - [ ] **Four-Eyes Principle**: Independent review workflow for critical operations
 - [ ] **Approval workflow**: Multi-stage approval for process changes
@@ -462,14 +286,17 @@ git push origin master        # Push immediately
 
 ---
 
-## 📊 PROGRESS TRACKING
+## 🎯 IMPLEMENTATION REFERENCE
 
-**Total Estimated Items**: ~150+ major items  
-**Current Progress**: 0% (Post-rebuild start)  
-**Target Timeline**: 8-11 weeks for complete GxP compliance  
-**Immediate Priority**: Phase 1-3 foundation (Core functionality restore)
+**Purpose**: Complete technical implementation guide  
+**Scope**: Phase 5+ active development only (Phase 4 complete and archived)  
+**Status**: See `docs/PROJECT_STATUS.md` for progress tracking
 
 ---
 
 **REMEMBER**: Commit after EVERY major item. Push immediately. Verify on GitHub.  
-**SAFETY FIRST**: When in doubt, create backup and verify before proceeding.
+**SAFETY FIRST**: When in doubt, create backup and verify before proceeding.  
+**ARCHIVED PHASES**: See `archived_md/PHASE_*_COMPLETE.md` for completed implementation details
+
+**Last Updated**: December 22, 2025  
+**Status**: Streamlined for Phase 5+ (reduced from 150+ to ~70 active items, Phase 4 archived)

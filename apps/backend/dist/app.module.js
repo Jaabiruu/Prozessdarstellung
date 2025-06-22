@@ -11,9 +11,13 @@ const common_1 = require("@nestjs/common");
 const graphql_1 = require("@nestjs/graphql");
 const apollo_1 = require("@nestjs/apollo");
 const terminus_1 = require("@nestjs/terminus");
+const core_1 = require("@nestjs/core");
 const health_1 = require("./health");
 const config_1 = require("./config");
 const database_1 = require("./database");
+const auth_1 = require("./auth");
+const audit_1 = require("./audit");
+const user_1 = require("./user");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -39,6 +43,15 @@ exports.AppModule = AppModule = __decorate([
             }),
             terminus_1.TerminusModule,
             health_1.HealthModule,
+            auth_1.AuthModule,
+            audit_1.AuditModule,
+            user_1.UserModule,
+        ],
+        providers: [
+            {
+                provide: core_1.APP_GUARD,
+                useClass: auth_1.JwtAuthGuard,
+            },
         ],
     })
 ], AppModule);

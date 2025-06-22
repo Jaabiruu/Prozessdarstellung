@@ -13,7 +13,7 @@ model User {
   password                      String
   firstName                     String?
   lastName                      String?
-  role                          UserRole                @default(OPERATOR)
+  role                          String                  @default("OPERATOR")
   isActive                      Boolean                 @default(true)
   createdAt                     DateTime                @default(now())
   updatedAt                     DateTime                @updatedAt
@@ -122,13 +122,6 @@ model ProcessVersion {
 
   @@unique([entityId, version])
   @@map("process_versions")
-}
-
-enum UserRole {
-  OPERATOR
-  MANAGER
-  ADMIN
-  QUALITY_ASSURANCE
 }
 
 enum ProductionLineStatus {
