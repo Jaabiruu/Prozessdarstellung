@@ -29,31 +29,7 @@ interface DatabaseConfig {
 | Leverage TypeScript compiler for error catching | Rely on runtime validation only |
 
 ### Sensitive Data Handling
-```typescript
-// ✅ DO: Class with secure serialization
-export class JwtConfig {
-  readonly secret: string;
-  readonly expiresIn: string;
-
-  constructor(config: { secret: string; expiresIn: string }) {
-    this.secret = config.secret;
-    this.expiresIn = config.expiresIn;
-  }
-
-  toJSON() {
-    return {
-      expiresIn: this.expiresIn,
-      secret: '[REDACTED]', // Prevents accidental logging
-    };
-  }
-}
-
-// ❌ DON'T: Interface for sensitive data
-interface JwtConfig {
-  secret: string; // Will be exposed in JSON.stringify()
-  expiresIn: string;
-}
-```
+Use classes with `toJSON()` redaction for secrets, not interfaces.
 
 ## 2. NestJS Architecture Standards
 
@@ -66,44 +42,7 @@ interface JwtConfig {
 | Use DTOs for all API inputs/outputs | Use `any` or raw objects |
 | Throw `HttpException` types (`NotFoundException`) | Let raw errors leak to API |
 
-```typescript
-// ✅ DO: Proper service structure
-@Injectable()
-export class ProcessService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
-    private readonly config: ConfigService,
-  ) {}
-
-  async createProcess(data: CreateProcessDto, userId: string, reason: string): Promise<Process> {
-    // Business logic here
-  }
-}
-
-// ❌ DON'T: Poor service structure
-@Injectable()
-export class ProcessService {
-  private prisma = new PrismaClient(); // Manual instantiation
-  
-  async createProcess(data: any): Promise<any> { // No types
-    // Logic mixed with HTTP concerns
-  }
-}
-```
-
-### Dependency Injection Patterns
-```typescript
-// ✅ DO: Constructor injection
-constructor(
-  private readonly prisma: PrismaService,
-  private readonly logger: Logger,
-) {}
-
-// ❌ DON'T: Property injection or manual instantiation
-private prisma = new PrismaService();
-@Inject(WINSTON_MODULE_PROVIDER) private logger;
-```
+Use constructor dependency injection with proper typing. No manual instantiation or `any` types.
 
 ### Single Responsibility Principle for Services
 | DO ✅ | DON'T ❌ |
@@ -112,27 +51,7 @@ private prisma = new PrismaService();
 | Create dedicated services for each domain entity | Add cross-entity methods to existing services |
 | Use composition to interact with other services | Embed other entity logic directly |
 
-```typescript
-// ✅ DO: Focused service responsibility
-@Injectable()
-export class ProductionLineService {
-  async findAll(): Promise<ProductionLine[]> { /* ... */ }
-  async create(data: CreateProductionLineDto): Promise<ProductionLine> { /* ... */ }
-}
-
-@Injectable()
-export class ProcessService {
-  async findByProductionLine(productionLineId: string): Promise<Process[]> { /* ... */ }
-}
-
-// ❌ DON'T: Mixed responsibilities
-@Injectable()
-export class ProductionLineService {
-  async findProcessesByProductionLine(id: string): Promise<Process[]> {
-    // This belongs in ProcessService
-  }
-}
-```
+Keep services focused on their primary entity. No cross-entity methods.
 
 ## 3. Prisma & Database Standards
 
@@ -284,64 +203,12 @@ async steps(@Parent() process: Process): Promise<Step[]> {
 | Use `getOrThrow()` for required configuration | Allow undefined secrets |
 | Validate configuration on app startup | Discover missing config at runtime |
 
-### Error Handling Patterns
-```typescript
-// ✅ DO: Structured error handling
-try {
-  const result = await this.dangerousOperation();
-  return result;
-} catch (error) {
-  this.logger.error('Operation failed', {
-    operation: 'dangerousOperation',
-    error: error.message,
-    userId: user.id,
-  });
-  throw new InternalServerErrorException('Operation failed');
-}
-
-// ❌ DON'T: Poor error handling
-try {
-  return await this.dangerousOperation();
-} catch (error) {
-  console.log(error); // No context, poor logging
-  throw error; // Raw error leaks internal details
-}
-```
+Use structured error handling with proper logging. Throw `HttpException` types, not raw errors.
 
 ## 6. Testing Standards
 
 ### Test Structure (AAA Pattern)
-```typescript
-// ✅ DO: Clear test structure
-describe('ProcessService', () => {
-  it('should create process with audit trail', async () => {
-    // Arrange
-    const createDto = { name: 'Test Process', description: 'Test' };
-    const userId = 'user-123';
-    const reason = 'Testing process creation';
-
-    // Act
-    const result = await service.createProcess(createDto, userId, reason);
-
-    // Assert
-    expect(result).toBeDefined();
-    expect(result.name).toBe(createDto.name);
-    expect(mockAuditService.create).toHaveBeenCalledWith({
-      action: 'CREATE',
-      entityType: 'Process',
-      userId,
-      reason,
-    });
-  });
-});
-
-// ❌ DON'T: Unclear test structure
-it('should work', async () => {
-  const result = await service.createProcess({ name: 'Test' }, 'user', 'reason');
-  expect(result.name).toBe('Test');
-  // No clear arrangement, mixed concerns
-});
-```
+Follow AAA pattern: Arrange, Act, Assert. Use descriptive test names and clear setup.
 
 ## 7. Class vs Interface Decision Matrix
 
@@ -364,34 +231,7 @@ it('should work', async () => {
 | Log only failures and errors | Log every successful health check |
 | Return structured status objects | Return boolean or generic responses |
 
-```typescript
-// ✅ DO: Proper Terminus health check pattern
-async checkDatabase(): Promise<HealthIndicatorResult> {
-  const key = 'database';
-  try {
-    await this.databaseService.ping(); // Real connectivity test
-    return this.getStatus(key, true, { responseTime: '15ms' });
-  } catch (error) {
-    this.logger.error(`${key} health check failed`, error.stack);
-    throw new HealthCheckError('Database connection failed', 
-      this.getStatus(key, false, { message: error.message }));
-  }
-}
-
-// ❌ DON'T: Anti-pattern with manual error handling
-async checkDatabase(): Promise<HealthIndicatorResult> {
-  try {
-    const isConfigured = !!this.config.databaseUrl; // Config-only check
-    if (!isConfigured) {
-      throw new Error('Database not configured'); // Generic throw
-    }
-    this.logger.log('Database health check passed'); // Log spam
-    return this.getStatus('database', true);
-  } catch (error) {
-    throw new Error('Health check failed'); // Loses context
-  }
-}
-```
+Use `HealthCheckError` with real connectivity tests. Let Terminus handle HTTP responses.
 
 ## 9. Enterprise DevSecOps & Governance Standards
 
@@ -405,23 +245,7 @@ async checkDatabase(): Promise<HealthIndicatorResult> {
 | Generate quality reports for regulatory audits | Skip documentation of quality metrics |
 
 ### Dependency Security & SBOM Management
-```typescript
-// ✅ DO: Automated dependency scanning workflow
-name: Security Scan
-on: [push, pull_request]
-jobs:
-  security:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@master
-        with:
-          args: --severity-threshold=medium
-      - name: Generate SBOM
-        run: |
-          npx @cyclonedx/cyclonedx-npm --output-file sbom.json
-          # Store SBOM for regulatory compliance
-```
+Implement automated dependency scanning with Snyk. Generate SBOM for regulatory compliance.
 
 ## 10. Code Review Enforcement Checklist
 
