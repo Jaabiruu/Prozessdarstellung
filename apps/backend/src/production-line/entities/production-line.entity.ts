@@ -52,4 +52,9 @@ export class ProductionLine {
 
   @Field(() => Int, { nullable: true })
   processCount?: number;
+
+  // For Prisma includes with _count
+  _count?: {
+    processes: number;
+  };
 }

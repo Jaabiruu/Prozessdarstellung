@@ -3,10 +3,11 @@ import { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { TestSetup } from './setup';
 import request from 'supertest';
+import { PrismaClient } from '@prisma/client';
 
 describe('Audit Trail System (E2E)', () => {
   let app: INestApplication;
-  let prisma: any;
+  let prisma: PrismaClient;
   let adminToken: string;
   let adminUserId: string;
 
@@ -32,7 +33,10 @@ describe('Audit Trail System (E2E)', () => {
     await app.close();
   });
 
-  async function getAuthToken(email: string, password: string): Promise<string> {
+  async function getAuthToken(
+    email: string,
+    password: string,
+  ): Promise<string> {
     const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
@@ -186,9 +190,9 @@ describe('Audit Trail System (E2E)', () => {
       expect(auditLog!.userId).toBe(adminUserId);
       expect(auditLog!.reason).toBe('Testing detailed audit logging');
       expect(auditLog!.details).toBeDefined();
-      
+
       // Verify rich context in details
-      const details = auditLog!.details as any;
+      const details = auditLog!.details as Record<string, unknown>;
       expect(details.email).toBe('detailed-audit@test.local');
       expect(details.role).toBe('OPERATOR');
       expect(details.firstName).toBe('Detailed');
@@ -226,7 +230,9 @@ describe('Audit Trail System (E2E)', () => {
 
       // Verify the response indicates rollback
       expect(response.body.data.testTransactionRollback.success).toBe(false);
-      expect(response.body.data.testTransactionRollback.message).toContain('rolled back');
+      expect(response.body.data.testTransactionRollback.message).toContain(
+        'rolled back',
+      );
 
       // Verify no new User record was created
       const userCountAfter = await prisma.user.count();
@@ -267,7 +273,9 @@ describe('Audit Trail System (E2E)', () => {
         .expect(200);
 
       expect(response.body.data.testTransactionRollback.success).toBe(true);
-      expect(response.body.data.testTransactionRollback.message).toContain('completed successfully');
+      expect(response.body.data.testTransactionRollback.message).toContain(
+        'completed successfully',
+      );
 
       // Verify the user was created
       const testUser = await prisma.user.findUnique({
@@ -312,7 +320,9 @@ describe('Audit Trail System (E2E)', () => {
         .expect(400); // Should return 400 due to validation failure
 
       expect(response.body.errors).toBeDefined();
-      expect(response.body.errors[0].message).toContain('Field "reason" of required type "String!" was not provided');
+      expect(response.body.errors[0].message).toContain(
+        'Field "reason" of required type "String!" was not provided',
+      );
 
       // Verify no user was created
       const testUser = await prisma.user.findUnique({
@@ -361,7 +371,9 @@ describe('Audit Trail System (E2E)', () => {
         .expect(200);
 
       expect(response.body.errors).toBeDefined();
-      expect(response.body.errors[0].message).toContain('Reason is required for user creation (GxP compliance)');
+      expect(response.body.errors[0].message).toContain(
+        'Reason is required for user creation (GxP compliance)',
+      );
 
       // Verify no user was created
       const testUser = await prisma.user.findUnique({

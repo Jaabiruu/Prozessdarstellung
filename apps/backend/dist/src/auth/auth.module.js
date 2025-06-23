@@ -12,6 +12,7 @@ const jwt_1 = require("@nestjs/jwt");
 const passport_1 = require("@nestjs/passport");
 const config_module_1 = require("../config/config.module");
 const config_service_1 = require("../config/config.service");
+const audit_module_1 = require("../audit/audit.module");
 const auth_service_1 = require("./auth.service");
 const auth_resolver_1 = require("./auth.resolver");
 const jwt_strategy_1 = require("./strategies/jwt.strategy");
@@ -24,6 +25,7 @@ exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_module_1.ConfigModule,
+            audit_module_1.AuditModule,
             passport_1.PassportModule.register({ defaultStrategy: 'jwt' }),
             jwt_1.JwtModule.registerAsync({
                 imports: [config_module_1.ConfigModule],
@@ -36,18 +38,8 @@ exports.AuthModule = AuthModule = __decorate([
                 inject: [config_service_1.ConfigService],
             }),
         ],
-        providers: [
-            auth_service_1.AuthService,
-            auth_resolver_1.AuthResolver,
-            jwt_strategy_1.JwtStrategy,
-            jwt_auth_guard_1.JwtAuthGuard,
-            roles_guard_1.RolesGuard,
-        ],
-        exports: [
-            auth_service_1.AuthService,
-            jwt_auth_guard_1.JwtAuthGuard,
-            roles_guard_1.RolesGuard,
-        ],
+        providers: [auth_service_1.AuthService, auth_resolver_1.AuthResolver, jwt_strategy_1.JwtStrategy, jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard],
+        exports: [auth_service_1.AuthService, jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard],
     })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map

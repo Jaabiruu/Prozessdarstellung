@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateProcessInput } from './dto/create-process.input';
 import { UpdateProcessInput } from './dto/update-process.input';
-import { Process, ProcessStatus } from '@prisma/client';
+import { Process, ProcessStatus, Prisma } from '@prisma/client';
 import { AuditAction } from '../common/enums/user-role.enum';
 
 @Injectable()
@@ -22,18 +28,22 @@ export class ProcessService {
     userAgent?: string,
   ): Promise<Process> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         // Verify production line exists and is active within transaction
         const productionLine = await tx.productionLine.findUnique({
           where: { id: createProcessInput.productionLineId },
         });
 
         if (!productionLine) {
-          throw new NotFoundException(`Production line with ID ${createProcessInput.productionLineId} not found`);
+          throw new NotFoundException(
+            `Production line with ID ${createProcessInput.productionLineId} not found`,
+          );
         }
 
         if (!productionLine.isActive) {
-          throw new BadRequestException('Cannot create process on inactive production line');
+          throw new BadRequestException(
+            'Cannot create process on inactive production line',
+          );
         }
 
         const process = await tx.process.create({
@@ -87,7 +97,9 @@ export class ProcessService {
     } catch (error) {
       // Handle Prisma unique constraint violation (P2002)
       if (error instanceof Error && 'code' in error && error.code === 'P2002') {
-        throw new ConflictException('Process with this title already exists in the production line');
+        throw new ConflictException(
+          'Process with this title already exists in the production line',
+        );
       }
 
       this.logger.error('Failed to create process', {
@@ -99,21 +111,23 @@ export class ProcessService {
     }
   }
 
-  async findAll(
-    options?: {
-      limit?: number;
-      offset?: number;
-      isActive?: boolean;
-      status?: ProcessStatus;
-      productionLineId?: string;
-    },
-  ): Promise<Process[]> {
+  async findAll(options?: {
+    limit?: number;
+    offset?: number;
+    isActive?: boolean;
+    status?: ProcessStatus;
+    productionLineId?: string;
+  }): Promise<Process[]> {
     try {
       const processes = await this.prisma.process.findMany({
         where: {
-          ...(options?.isActive !== undefined && { isActive: options.isActive }),
+          ...(options?.isActive !== undefined && {
+            isActive: options.isActive,
+          }),
           ...(options?.status && { status: options.status }),
-          ...(options?.productionLineId && { productionLineId: options.productionLineId }),
+          ...(options?.productionLineId && {
+            productionLineId: options.productionLineId,
+          }),
         },
         include: {
           creator: {
@@ -184,41 +198,9 @@ export class ProcessService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      
+
       this.logger.error('Failed to fetch process', {
         processId: id,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw error;
-    }
-  }
-
-  async findAllByProductionLine(
-    productionLineId: string,
-    options?: {
-      limit?: number;
-      offset?: number;
-      isActive?: boolean;
-      status?: ProcessStatus;
-    },
-  ): Promise<Process[]> {
-    try {
-      // Verify production line exists
-      const productionLine = await this.prisma.productionLine.findUnique({
-        where: { id: productionLineId },
-      });
-
-      if (!productionLine) {
-        throw new NotFoundException(`Production line with ID ${productionLineId} not found`);
-      }
-
-      return this.findAll({
-        ...options,
-        productionLineId,
-      });
-    } catch (error) {
-      this.logger.error('Failed to fetch processes by production line', {
-        productionLineId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       throw error;
@@ -232,18 +214,20 @@ export class ProcessService {
     userAgent?: string,
   ): Promise<Process> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         // Fetch existing process within transaction to get "before" state for audit
         const existingProcess = await tx.process.findUnique({
           where: { id: updateProcessInput.id },
         });
 
         if (!existingProcess) {
-          throw new NotFoundException(`Process with ID ${updateProcessInput.id} not found`);
+          throw new NotFoundException(
+            `Process with ID ${updateProcessInput.id} not found`,
+          );
         }
 
-        const updateData: any = {};
-        
+        const updateData: Prisma.ProcessUpdateInput = {};
+
         if (updateProcessInput.title !== undefined) {
           updateData.title = updateProcessInput.title;
         }
@@ -313,7 +297,9 @@ export class ProcessService {
     } catch (error) {
       // Handle Prisma unique constraint violation (P2002)
       if (error instanceof Error && 'code' in error && error.code === 'P2002') {
-        throw new ConflictException('Process with this title already exists in the production line');
+        throw new ConflictException(
+          'Process with this title already exists in the production line',
+        );
       }
 
       this.logger.error('Failed to update process', {
@@ -340,10 +326,10 @@ export class ProcessService {
 
       // Simplified validation - allow deactivation in any state for display-only app
 
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         const process = await tx.process.update({
           where: { id },
-          data: { 
+          data: {
             isActive: false,
           },
         });

@@ -21,4 +21,5 @@ __exportStar(require("./decorators/current-user.decorator"), exports);
 __exportStar(require("./decorators/roles.decorator"), exports);
 __exportStar(require("./decorators/public.decorator"), exports);
 __exportStar(require("./decorators/audit-metadata.decorator"), exports);
+__exportStar(require("./decorators/audit-context.decorator"), exports);
 //# sourceMappingURL=index.js.map

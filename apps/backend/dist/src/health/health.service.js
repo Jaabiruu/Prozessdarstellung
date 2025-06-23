@@ -32,7 +32,10 @@ let HealthService = HealthService_1 = class HealthService extends terminus_1.Hea
                 });
             }
             const message = 'Database connection failed';
-            this.logger.error(message, { status: healthCheck.status, responseTime: healthCheck.responseTime });
+            this.logger.error(message, {
+                status: healthCheck.status,
+                responseTime: healthCheck.responseTime,
+            });
             throw new terminus_1.HealthCheckError(message, this.getStatus(key, false, {
                 status: healthCheck.status,
                 responseTime: `${healthCheck.responseTime}ms`,

@@ -1,4 +1,13 @@
-import { Resolver, Query, Mutation, Args, Context, ResolveField, Parent, Int } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  Context,
+  ResolveField,
+  Parent,
+  Int,
+} from '@nestjs/graphql';
 import { GraphQLContext } from '../common/interfaces/graphql-context.interface';
 import { UseGuards } from '@nestjs/common';
 import { ProductionLineService } from './production-line.service';
@@ -9,11 +18,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { AuditContext } from '../common/decorators/audit-context.decorator';
+import type { AuditContext as AuditContextType } from '../common/decorators/audit-context.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { User as PrismaUser, ProductionLineStatus } from '@prisma/client';
 import { User } from '../user/entities/user.entity';
 import { Process } from '../process/entities/process.entity';
-// Import will be resolved at runtime to avoid circular dependency
 
 @Resolver(() => ProductionLine)
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -25,26 +35,32 @@ export class ProductionLineResolver {
   async createProductionLine(
     @Args('input') createProductionLineInput: CreateProductionLineInput,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<ProductionLine> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.productionLineService.create(
       createProductionLineInput,
       currentUser.id,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
 
   @Query(() => [ProductionLine])
-  @Roles(UserRole.OPERATOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.QUALITY_ASSURANCE)
+  @Roles(
+    UserRole.OPERATOR,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+    UserRole.QUALITY_ASSURANCE,
+  )
   async productionLines(
-    @Args('limit', { type: () => Int, nullable: true, defaultValue: 100 }) limit: number,
-    @Args('offset', { type: () => Int, nullable: true, defaultValue: 0 }) offset: number,
-    @Args('isActive', { type: () => Boolean, nullable: true }) isActive?: boolean,
-    @Args('status', { type: () => ProductionLineStatus, nullable: true }) status?: ProductionLineStatus,
+    @Args('limit', { type: () => Int, nullable: true, defaultValue: 100 })
+    limit: number,
+    @Args('offset', { type: () => Int, nullable: true, defaultValue: 0 })
+    offset: number,
+    @Args('isActive', { type: () => Boolean, nullable: true })
+    isActive?: boolean,
+    @Args('status', { type: () => ProductionLineStatus, nullable: true })
+    status?: ProductionLineStatus,
   ): Promise<ProductionLine[]> {
     return this.productionLineService.findAll({
       limit,
@@ -55,7 +71,12 @@ export class ProductionLineResolver {
   }
 
   @Query(() => ProductionLine)
-  @Roles(UserRole.OPERATOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.QUALITY_ASSURANCE)
+  @Roles(
+    UserRole.OPERATOR,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+    UserRole.QUALITY_ASSURANCE,
+  )
   async productionLine(@Args('id') id: string): Promise<ProductionLine> {
     return this.productionLineService.findOne(id);
   }
@@ -65,16 +86,13 @@ export class ProductionLineResolver {
   async updateProductionLine(
     @Args('input') updateProductionLineInput: UpdateProductionLineInput,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<ProductionLine> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.productionLineService.update(
       updateProductionLineInput,
       currentUser.id,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
 
@@ -84,20 +102,16 @@ export class ProductionLineResolver {
     @Args('id') id: string,
     @Args('reason') reason: string,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<ProductionLine> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.productionLineService.remove(
       id,
       reason,
       currentUser.id,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
-
 
   // Field resolvers for relationships - these will be optimized with DataLoader in Phase 4.3
   @ResolveField(() => User, { nullable: true })
@@ -109,22 +123,20 @@ export class ProductionLineResolver {
     return context.dataloaders.userLoader.load(productionLine.createdBy);
   }
 
-  @ResolveField(() => [Object], { nullable: true })
+  @ResolveField(() => [Process], { nullable: true })
   async processes(
     @Parent() productionLine: ProductionLine,
     @Context() context: GraphQLContext,
-  ): Promise<any[]> {
+  ): Promise<Process[]> {
     // Use DataLoader to prevent N+1 queries
-    return context.dataloaders.processesByProductionLineLoader.load(productionLine.id);
+    return context.dataloaders.processesByProductionLineLoader.load(
+      productionLine.id,
+    );
   }
 
   @ResolveField(() => Int, { nullable: true })
-  async processCount(
-    @Parent() productionLine: ProductionLine,
-    @Context() context: GraphQLContext,
-  ): Promise<number> {
-    // Use DataLoader to get processes and return count
-    const processes = await context.dataloaders.processesByProductionLineLoader.load(productionLine.id);
-    return processes.length;
+  processCount(@Parent() productionLine: ProductionLine): number {
+    // Use count from parent object if available (from Prisma _count include)
+    return productionLine._count?.processes ?? 0;
   }
 }

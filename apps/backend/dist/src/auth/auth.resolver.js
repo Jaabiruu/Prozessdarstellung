@@ -22,16 +22,15 @@ const auth_response_dto_1 = require("./dto/auth-response.dto");
 const jwt_auth_guard_1 = require("./guards/jwt-auth.guard");
 const current_user_decorator_1 = require("../common/decorators/current-user.decorator");
 const public_decorator_1 = require("../common/decorators/public.decorator");
+const audit_context_decorator_1 = require("../common/decorators/audit-context.decorator");
 let AuthResolver = class AuthResolver {
     authService;
     constructor(authService) {
         this.authService = authService;
     }
-    async login(loginInput, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
+    async login(loginInput, auditContext) {
         try {
-            const result = await this.authService.login(loginInput, ipAddress, userAgent);
+            const result = await this.authService.login(loginInput, auditContext.ipAddress, auditContext.userAgent);
             return result;
         }
         catch (error) {
@@ -42,7 +41,7 @@ let AuthResolver = class AuthResolver {
             throw new common_1.UnauthorizedException('Invalid credentials');
         }
     }
-    async logout(user, context) {
+    async logout(user, context, auditContext) {
         const authHeader = context.req?.headers?.authorization;
         if (!authHeader) {
             throw new common_1.UnauthorizedException('No authorization header');
@@ -53,7 +52,7 @@ let AuthResolver = class AuthResolver {
             if (!payload || !payload.jti) {
                 throw new common_1.UnauthorizedException('Invalid token');
             }
-            const result = await this.authService.logout(payload.jti, user.id);
+            const result = await this.authService.logout(payload.jti, user.id, auditContext.ipAddress, auditContext.userAgent);
             if (!result) {
                 throw new common_1.UnauthorizedException('Logout failed');
             }
@@ -74,7 +73,7 @@ __decorate([
     (0, public_decorator_1.Public)(),
     (0, throttler_1.Throttle)({ default: { limit: 5, ttl: 60000 } }),
     __param(0, (0, graphql_1.Args)('input')),
-    __param(1, (0, graphql_1.Context)()),
+    __param(1, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [login_input_1.LoginInput, Object]),
     __metadata("design:returntype", Promise)
@@ -84,8 +83,9 @@ __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, graphql_1.Context)()),
+    __param(2, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthResolver.prototype, "logout", null);
 exports.AuthResolver = AuthResolver = __decorate([

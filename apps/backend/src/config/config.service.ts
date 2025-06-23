@@ -22,7 +22,10 @@ export class ConfigService implements ApplicationConfiguration {
 
   get app(): AppConfig {
     if (!this._app) {
-      const nodeEnv = this.configService.get<NodeEnv>('NODE_ENV', 'development');
+      const nodeEnv = this.configService.get<NodeEnv>(
+        'NODE_ENV',
+        'development',
+      );
       this._app = {
         nodeEnv,
         port: this.configService.get<number>('PORT', 3000),
@@ -35,10 +38,23 @@ export class ConfigService implements ApplicationConfiguration {
     if (!this._database) {
       this._database = {
         url: this.configService.getOrThrow<string>('DATABASE_URL'),
-        maxConnections: parseInt(this.configService.get<string>('DATABASE_MAX_CONNECTIONS', '10'), 10),
-        connectionTimeout: parseInt(this.configService.get<string>('DATABASE_CONNECTION_TIMEOUT', '5000'), 10),
-        queryTimeout: parseInt(this.configService.get<string>('DATABASE_QUERY_TIMEOUT', '10000'), 10),
-        logQueries: this.configService.get<string>('DATABASE_LOG_QUERIES', String(this.isDevelopment)) === 'true',
+        maxConnections: parseInt(
+          this.configService.get<string>('DATABASE_MAX_CONNECTIONS', '10'),
+          10,
+        ),
+        connectionTimeout: parseInt(
+          this.configService.get<string>('DATABASE_CONNECTION_TIMEOUT', '5000'),
+          10,
+        ),
+        queryTimeout: parseInt(
+          this.configService.get<string>('DATABASE_QUERY_TIMEOUT', '10000'),
+          10,
+        ),
+        logQueries:
+          this.configService.get<string>(
+            'DATABASE_LOG_QUERIES',
+            String(this.isDevelopment),
+          ) === 'true',
       };
     }
     return this._database;

@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateProductionLineInput } from './dto/create-production-line.input';
 import { UpdateProductionLineInput } from './dto/update-production-line.input';
-import { ProductionLine, ProductionLineStatus } from '@prisma/client';
+import { ProductionLine, ProductionLineStatus, Prisma } from '@prisma/client';
 import { AuditAction } from '../common/enums/user-role.enum';
 
 @Injectable()
@@ -22,13 +27,15 @@ export class ProductionLineService {
     userAgent?: string,
   ): Promise<ProductionLine> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         const productionLine = await tx.productionLine.create({
           data: {
             name: createProductionLineInput.name,
-            status: createProductionLineInput.status || ProductionLineStatus.ACTIVE,
+            status:
+              createProductionLineInput.status || ProductionLineStatus.ACTIVE,
             createdBy: currentUserId,
-            reason: createProductionLineInput.reason || 'Production line created',
+            reason:
+              createProductionLineInput.reason || 'Production line created',
           },
         });
 
@@ -38,7 +45,8 @@ export class ProductionLineService {
             action: AuditAction.CREATE,
             entityType: 'ProductionLine',
             entityId: productionLine.id,
-            reason: createProductionLineInput.reason || 'Production line created',
+            reason:
+              createProductionLineInput.reason || 'Production line created',
             ipAddress: ipAddress || null,
             userAgent: userAgent || null,
             details: {
@@ -62,7 +70,9 @@ export class ProductionLineService {
     } catch (error) {
       // Handle Prisma unique constraint violation (P2002)
       if (error instanceof Error && 'code' in error && error.code === 'P2002') {
-        throw new ConflictException('Production line with this name already exists');
+        throw new ConflictException(
+          'Production line with this name already exists',
+        );
       }
 
       this.logger.error('Failed to create production line', {
@@ -74,18 +84,18 @@ export class ProductionLineService {
     }
   }
 
-  async findAll(
-    options?: {
-      limit?: number;
-      offset?: number;
-      isActive?: boolean;
-      status?: ProductionLineStatus;
-    },
-  ): Promise<ProductionLine[]> {
+  async findAll(options?: {
+    limit?: number;
+    offset?: number;
+    isActive?: boolean;
+    status?: ProductionLineStatus;
+  }): Promise<ProductionLine[]> {
     try {
       const productionLines = await this.prisma.productionLine.findMany({
         where: {
-          ...(options?.isActive !== undefined && { isActive: options.isActive }),
+          ...(options?.isActive !== undefined && {
+            isActive: options.isActive,
+          }),
           ...(options?.status && { status: options.status }),
         },
         include: {
@@ -163,7 +173,7 @@ export class ProductionLineService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      
+
       this.logger.error('Failed to fetch production line', {
         productionLineId: id,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -179,18 +189,20 @@ export class ProductionLineService {
     userAgent?: string,
   ): Promise<ProductionLine> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         // Fetch existing production line within transaction to get "before" state for audit
         const existingProductionLine = await tx.productionLine.findUnique({
           where: { id: updateProductionLineInput.id },
         });
 
         if (!existingProductionLine) {
-          throw new NotFoundException(`Production line with ID ${updateProductionLineInput.id} not found`);
+          throw new NotFoundException(
+            `Production line with ID ${updateProductionLineInput.id} not found`,
+          );
         }
 
-        const updateData: any = {};
-        
+        const updateData: Prisma.ProductionLineUpdateInput = {};
+
         if (updateProductionLineInput.name !== undefined) {
           updateData.name = updateProductionLineInput.name;
         }
@@ -211,7 +223,8 @@ export class ProductionLineService {
             action: AuditAction.UPDATE,
             entityType: 'ProductionLine',
             entityId: productionLine.id,
-            reason: updateProductionLineInput.reason || 'Production line updated',
+            reason:
+              updateProductionLineInput.reason || 'Production line updated',
             ipAddress: ipAddress || null,
             userAgent: userAgent || null,
             details: {
@@ -236,7 +249,9 @@ export class ProductionLineService {
     } catch (error) {
       // Handle Prisma unique constraint violation (P2002)
       if (error instanceof Error && 'code' in error && error.code === 'P2002') {
-        throw new ConflictException('Production line with this name already exists');
+        throw new ConflictException(
+          'Production line with this name already exists',
+        );
       }
 
       this.logger.error('Failed to update production line', {
@@ -255,14 +270,16 @@ export class ProductionLineService {
     userAgent?: string,
   ): Promise<ProductionLine> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         // Fetch existing production line within transaction to get "before" state for audit
         const existingProductionLine = await tx.productionLine.findUnique({
           where: { id },
         });
 
         if (!existingProductionLine) {
-          throw new NotFoundException(`Production line with ID ${id} not found`);
+          throw new NotFoundException(
+            `Production line with ID ${id} not found`,
+          );
         }
 
         if (!existingProductionLine.isActive) {
@@ -280,13 +297,13 @@ export class ProductionLineService {
 
         if (activeProcesses > 0) {
           throw new ConflictException(
-            `Cannot deactivate production line with ${activeProcesses} active processes. Please complete or cancel all processes first.`
+            `Cannot deactivate production line with ${activeProcesses} active processes. Please complete or cancel all processes first.`,
           );
         }
 
         const productionLine = await tx.productionLine.update({
           where: { id },
-          data: { 
+          data: {
             isActive: false,
           },
         });
@@ -321,51 +338,6 @@ export class ProductionLineService {
     } catch (error) {
       this.logger.error('Failed to deactivate production line', {
         productionLineId: id,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw error;
-    }
-  }
-
-  async findProcessesByProductionLine(
-    productionLineId: string,
-    options?: {
-      limit?: number;
-      offset?: number;
-      isActive?: boolean;
-    },
-  ): Promise<any[]> {
-    try {
-      // Verify production line exists
-      await this.findOne(productionLineId);
-
-      const processes = await this.prisma.process.findMany({
-        where: {
-          productionLineId,
-          ...(options?.isActive !== undefined && { isActive: options.isActive }),
-        },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              role: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        take: options?.limit || 100,
-        skip: options?.offset || 0,
-      });
-
-      return processes;
-    } catch (error) {
-      this.logger.error('Failed to fetch processes for production line', {
-        productionLineId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       throw error;

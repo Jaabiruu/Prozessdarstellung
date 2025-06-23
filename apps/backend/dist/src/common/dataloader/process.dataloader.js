@@ -67,6 +67,8 @@ let ProcessDataLoader = class ProcessDataLoader {
                     lastName: true,
                     role: true,
                     isActive: true,
+                    createdAt: true,
+                    updatedAt: true,
                 },
             });
             const userMap = new Map(users.map(user => [user.id, user]));

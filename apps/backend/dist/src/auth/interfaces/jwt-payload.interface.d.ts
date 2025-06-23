@@ -3,8 +3,8 @@ export interface JwtPayload {
     readonly email: string;
     readonly role: string;
     readonly jti: string;
-    readonly iat: number;
-    readonly exp: number;
+    readonly iat?: number;
+    readonly exp?: number;
 }
 export interface AuthenticationResult {
     readonly user: {

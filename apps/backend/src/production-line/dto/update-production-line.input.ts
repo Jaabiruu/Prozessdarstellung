@@ -1,5 +1,13 @@
 import { InputType, Field, ID } from '@nestjs/graphql';
-import { IsString, IsEnum, IsOptional, IsNotEmpty, MinLength, MaxLength, IsUUID } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsNotEmpty,
+  MinLength,
+  MaxLength,
+  IsUUID,
+} from 'class-validator';
 import { ProductionLineStatus } from '@prisma/client';
 
 @InputType()
@@ -13,13 +21,17 @@ export class UpdateProductionLineInput {
   @Field({ nullable: true })
   @IsOptional()
   @IsString()
-  @MinLength(2, { message: 'Production line name must be at least 2 characters long' })
-  @MaxLength(100, { message: 'Production line name must not exceed 100 characters' })
+  @MinLength(2, {
+    message: 'Production line name must be at least 2 characters long',
+  })
+  @MaxLength(100, {
+    message: 'Production line name must not exceed 100 characters',
+  })
   name?: string;
 
-  @Field(() => ProductionLineStatus, { 
+  @Field(() => ProductionLineStatus, {
     nullable: true,
-    description: 'New status of the production line' 
+    description: 'New status of the production line',
   })
   @IsOptional()
   @IsEnum(ProductionLineStatus, { message: 'Invalid production line status' })

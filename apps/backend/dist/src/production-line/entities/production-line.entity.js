@@ -32,6 +32,7 @@ let ProductionLine = class ProductionLine {
     creator;
     processes;
     processCount;
+    _count;
 };
 exports.ProductionLine = ProductionLine;
 __decorate([

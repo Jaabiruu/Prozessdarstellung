@@ -40,10 +40,10 @@
     "@prisma/client": "^6.10.1",
     "@types/uuid": "^10.0.0",
     "apollo-server-express": "^3.12.1",
-    "dataloader": "^2.2.2",
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
+    "dataloader": "^2.2.3",
     "dotenv": "^16.3.1",
     "graphql": "^16.8.1",
     "ioredis": "^5.3.2",
@@ -59,7 +59,6 @@
     "@nestjs/schematics": "^10.0.3",
     "@nestjs/testing": "^10.3.0",
     "@types/bcrypt": "^5.0.2",
-    "@types/dataloader": "^2.0.3",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.11",
     "@types/node": "^20.10.5",
@@ -101,7 +100,9 @@
     ],
     "coverageDirectory": "./coverage",
     "testEnvironment": "node",
-    "setupFilesAfterEnv": ["<rootDir>/test/setup.ts"],
+    "setupFilesAfterEnv": [
+      "<rootDir>/test/setup.ts"
+    ],
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/dist/"

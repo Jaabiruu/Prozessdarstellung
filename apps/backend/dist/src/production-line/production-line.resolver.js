@@ -23,18 +23,18 @@ const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
 const roles_guard_1 = require("../auth/guards/roles.guard");
 const current_user_decorator_1 = require("../common/decorators/current-user.decorator");
 const roles_decorator_1 = require("../common/decorators/roles.decorator");
+const audit_context_decorator_1 = require("../common/decorators/audit-context.decorator");
 const user_role_enum_1 = require("../common/enums/user-role.enum");
 const client_1 = require("@prisma/client");
 const user_entity_1 = require("../user/entities/user.entity");
+const process_entity_1 = require("../process/entities/process.entity");
 let ProductionLineResolver = class ProductionLineResolver {
     productionLineService;
     constructor(productionLineService) {
         this.productionLineService = productionLineService;
     }
-    async createProductionLine(createProductionLineInput, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.productionLineService.create(createProductionLineInput, currentUser.id, ipAddress, userAgent);
+    async createProductionLine(createProductionLineInput, currentUser, auditContext) {
+        return this.productionLineService.create(createProductionLineInput, currentUser.id, auditContext.ipAddress, auditContext.userAgent);
     }
     async productionLines(limit, offset, isActive, status) {
         return this.productionLineService.findAll({
@@ -47,15 +47,11 @@ let ProductionLineResolver = class ProductionLineResolver {
     async productionLine(id) {
         return this.productionLineService.findOne(id);
     }
-    async updateProductionLine(updateProductionLineInput, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.productionLineService.update(updateProductionLineInput, currentUser.id, ipAddress, userAgent);
+    async updateProductionLine(updateProductionLineInput, currentUser, auditContext) {
+        return this.productionLineService.update(updateProductionLineInput, currentUser.id, auditContext.ipAddress, auditContext.userAgent);
     }
-    async removeProductionLine(id, reason, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.productionLineService.remove(id, reason, currentUser.id, ipAddress, userAgent);
+    async removeProductionLine(id, reason, currentUser, auditContext) {
+        return this.productionLineService.remove(id, reason, currentUser.id, auditContext.ipAddress, auditContext.userAgent);
     }
     async creator(productionLine, context) {
         return context.dataloaders.userLoader.load(productionLine.createdBy);
@@ -63,9 +59,8 @@ let ProductionLineResolver = class ProductionLineResolver {
     async processes(productionLine, context) {
         return context.dataloaders.processesByProductionLineLoader.load(productionLine.id);
     }
-    async processCount(productionLine, context) {
-        const processes = await context.dataloaders.processesByProductionLineLoader.load(productionLine.id);
-        return processes.length;
+    processCount(productionLine) {
+        return productionLine._count?.processes ?? 0;
     }
 };
 exports.ProductionLineResolver = ProductionLineResolver;
@@ -74,7 +69,7 @@ __decorate([
     (0, roles_decorator_1.Roles)(user_role_enum_1.UserRole.MANAGER, user_role_enum_1.UserRole.ADMIN),
     __param(0, (0, graphql_1.Args)('input')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
-    __param(2, (0, graphql_1.Context)()),
+    __param(2, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [create_production_line_input_1.CreateProductionLineInput, Object, Object]),
     __metadata("design:returntype", Promise)
@@ -103,7 +98,7 @@ __decorate([
     (0, roles_decorator_1.Roles)(user_role_enum_1.UserRole.MANAGER, user_role_enum_1.UserRole.ADMIN),
     __param(0, (0, graphql_1.Args)('input')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
-    __param(2, (0, graphql_1.Context)()),
+    __param(2, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [update_production_line_input_1.UpdateProductionLineInput, Object, Object]),
     __metadata("design:returntype", Promise)
@@ -114,7 +109,7 @@ __decorate([
     __param(0, (0, graphql_1.Args)('id')),
     __param(1, (0, graphql_1.Args)('reason')),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
-    __param(3, (0, graphql_1.Context)()),
+    __param(3, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, Object, Object]),
     __metadata("design:returntype", Promise)
@@ -128,7 +123,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ProductionLineResolver.prototype, "creator", null);
 __decorate([
-    (0, graphql_1.ResolveField)(() => [Object], { nullable: true }),
+    (0, graphql_1.ResolveField)(() => [process_entity_1.Process], { nullable: true }),
     __param(0, (0, graphql_1.Parent)()),
     __param(1, (0, graphql_1.Context)()),
     __metadata("design:type", Function),
@@ -138,10 +133,9 @@ __decorate([
 __decorate([
     (0, graphql_1.ResolveField)(() => graphql_1.Int, { nullable: true }),
     __param(0, (0, graphql_1.Parent)()),
-    __param(1, (0, graphql_1.Context)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [production_line_entity_1.ProductionLine, Object]),
-    __metadata("design:returntype", Promise)
+    __metadata("design:paramtypes", [production_line_entity_1.ProductionLine]),
+    __metadata("design:returntype", Number)
 ], ProductionLineResolver.prototype, "processCount", null);
 exports.ProductionLineResolver = ProductionLineResolver = __decorate([
     (0, graphql_1.Resolver)(() => production_line_entity_1.ProductionLine),

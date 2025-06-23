@@ -54,7 +54,9 @@ __decorate([
 __decorate([
     (0, graphql_1.Field)(),
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsNotEmpty)({ message: 'Reason is required for user updates (GxP compliance)' }),
+    (0, class_validator_1.IsNotEmpty)({
+        message: 'Reason is required for user updates (GxP compliance)',
+    }),
     __metadata("design:type", String)
 ], UpdateUserInput.prototype, "reason", void 0);
 exports.UpdateUserInput = UpdateUserInput = __decorate([

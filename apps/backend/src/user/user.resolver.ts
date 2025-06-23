@@ -1,4 +1,11 @@
-import { Resolver, Query, Mutation, Args, Context, ObjectType, Field } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ObjectType,
+  Field,
+} from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
@@ -8,6 +15,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { AuditContext } from '../common/decorators/audit-context.decorator';
+import type { AuditContext as AuditContextType } from '../common/decorators/audit-context.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { User as PrismaUser } from '@prisma/client';
 
@@ -30,25 +39,25 @@ export class UserResolver {
   async createUser(
     @Args('input') createUserInput: CreateUserInput,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<User> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.userService.create(
       createUserInput,
       currentUser.id,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
 
   @Query(() => [User])
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   async users(
-    @Args('limit', { type: () => Number, nullable: true, defaultValue: 100 }) limit: number,
-    @Args('offset', { type: () => Number, nullable: true, defaultValue: 0 }) offset: number,
-    @Args('isActive', { type: () => Boolean, nullable: true }) isActive?: boolean,
+    @Args('limit', { type: () => Number, nullable: true, defaultValue: 100 })
+    limit: number,
+    @Args('offset', { type: () => Number, nullable: true, defaultValue: 0 })
+    offset: number,
+    @Args('isActive', { type: () => Boolean, nullable: true })
+    isActive?: boolean,
     @Args('role', { type: () => String, nullable: true }) role?: string,
   ): Promise<User[]> {
     return this.userService.findAll({
@@ -75,17 +84,14 @@ export class UserResolver {
   async updateUser(
     @Args('input') updateUserInput: UpdateUserInput,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<User> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.userService.update(
       updateUserInput,
       currentUser.id,
       currentUser.role,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
 
@@ -95,17 +101,14 @@ export class UserResolver {
     @Args('id') id: string,
     @Args('reason') reason: string,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<User> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.userService.deactivate(
       id,
       reason,
       currentUser.id,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
 
@@ -115,18 +118,15 @@ export class UserResolver {
     @Args('newPassword') newPassword: string,
     @Args('reason') reason: string,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<boolean> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.userService.changePassword(
       userId,
       newPassword,
       reason,
       currentUser.id,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
 
@@ -134,7 +134,8 @@ export class UserResolver {
   @Roles(UserRole.ADMIN)
   async testTransactionRollback(
     @Args('testUserEmail') testUserEmail: string,
-    @Args('shouldFail', { type: () => Boolean, defaultValue: true }) shouldFail: boolean,
+    @Args('shouldFail', { type: () => Boolean, defaultValue: true })
+    shouldFail: boolean,
     @CurrentUser() currentUser: PrismaUser,
   ): Promise<TransactionTestResult> {
     return this.userService.testTransactionRollback(

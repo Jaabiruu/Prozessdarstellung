@@ -363,7 +363,9 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
             expect(response.body.data.productionLines).toBeDefined();
             expect(response.body.data.productionLines).toHaveLength(5);
             const returnedNames = response.body.data.productionLines.map(line => line.name);
-            const expectedNames = productionLines.slice(10, 15).map(line => line.name);
+            const expectedNames = productionLines
+                .slice(10, 15)
+                .map(line => line.name);
             expect(returnedNames).toEqual(expectedNames);
         });
         it('should return empty array when offset exceeds total records', async () => {
@@ -480,6 +482,335 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
                 action: 'deactivation',
                 previouslyActive: true,
             });
+        });
+    });
+    describe('Atomicity & Race Condition Tests', () => {
+        it('should prevent race conditions during concurrent ProductionLine creates (ATOM-004)', async () => {
+            const createMutation = `
+        mutation CreateProductionLine($input: CreateProductionLineInput!) {
+          createProductionLine(input: $input) {
+            id
+            name
+          }
+        }
+      `;
+            const input = {
+                name: 'RACE_TEST_LINE',
+                status: 'ACTIVE',
+                reason: 'Race condition test',
+            };
+            const [result1, result2] = await Promise.allSettled([
+                (0, supertest_1.default)(app.getHttpServer())
+                    .post('/graphql')
+                    .set('Authorization', `Bearer ${managerToken}`)
+                    .send({
+                    query: createMutation,
+                    variables: { input },
+                }),
+                (0, supertest_1.default)(app.getHttpServer())
+                    .post('/graphql')
+                    .set('Authorization', `Bearer ${managerToken}`)
+                    .send({
+                    query: createMutation,
+                    variables: { input },
+                }),
+            ]);
+            const responses = [result1, result2];
+            const successCount = responses.filter(r => r.status === 'fulfilled' && r.value.status === 200 && !r.value.body.errors).length;
+            const errorCount = responses.filter(r => (r.status === 'fulfilled' && (r.value.status !== 200 || r.value.body.errors)) ||
+                r.status === 'rejected').length;
+            expect(successCount).toBe(1);
+            expect(errorCount).toBe(1);
+            const records = await prisma.productionLine.findMany({
+                where: { name: 'RACE_TEST_LINE' },
+            });
+            expect(records).toHaveLength(1);
+        });
+        it('should handle P2002 errors correctly for name uniqueness (ATOM-005)', async () => {
+            const createMutation = `
+        mutation CreateProductionLine($input: CreateProductionLineInput!) {
+          createProductionLine(input: $input) {
+            id
+            name
+          }
+        }
+      `;
+            await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${managerToken}`)
+                .send({
+                query: createMutation,
+                variables: {
+                    input: {
+                        name: 'P2002_TEST_LINE',
+                        status: 'ACTIVE',
+                        reason: 'First line for P2002 test',
+                    },
+                },
+            });
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${managerToken}`)
+                .send({
+                query: createMutation,
+                variables: {
+                    input: {
+                        name: 'P2002_TEST_LINE',
+                        status: 'INACTIVE',
+                        reason: 'Should fail due to duplicate name',
+                    },
+                },
+            })
+                .expect(200);
+            expect(response.body.errors).toBeDefined();
+            expect(response.body.errors[0].message).toContain('already exists');
+            expect(response.body.data.createProductionLine).toBeNull();
+        });
+        it('should maintain transaction integrity during ProductionLine operations', async () => {
+            const initialCount = await prisma.productionLine.count();
+            const initialAuditCount = await prisma.auditLog.count();
+            const createMutation = `
+        mutation CreateProductionLine($input: CreateProductionLineInput!) {
+          createProductionLine(input: $input) {
+            id
+            name
+            status
+          }
+        }
+      `;
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${managerToken}`)
+                .send({
+                query: createMutation,
+                variables: {
+                    input: {
+                        name: 'TRANSACTION_INTEGRITY_TEST',
+                        status: 'ACTIVE',
+                        reason: 'Testing transaction integrity',
+                    },
+                },
+            })
+                .expect(200);
+            const productionLineId = response.body.data.createProductionLine.id;
+            const finalCount = await prisma.productionLine.count();
+            const finalAuditCount = await prisma.auditLog.count();
+            expect(finalCount).toBe(initialCount + 1);
+            expect(finalAuditCount).toBeGreaterThan(initialAuditCount);
+            const auditLog = await prisma.auditLog.findFirst({
+                where: {
+                    entityType: 'ProductionLine',
+                    entityId: productionLineId,
+                    action: 'CREATE',
+                },
+            });
+            expect(auditLog).toBeDefined();
+            expect(auditLog.reason).toBe('Testing transaction integrity');
+        });
+    });
+    describe('Performance & DataLoader Tests', () => {
+        beforeEach(async () => {
+            for (let i = 1; i <= 3; i++) {
+                const line = await prisma.productionLine.create({
+                    data: {
+                        name: `perf-test-line-${i}`,
+                        status: 'ACTIVE',
+                        createdBy: 'test-user-id',
+                        reason: `Performance test line ${i}`,
+                    },
+                });
+                for (let j = 1; j <= 2; j++) {
+                    await prisma.process.create({
+                        data: {
+                            title: `perf-test-process-${i}-${j}`,
+                            description: `Process ${j} for line ${i}`,
+                            status: 'PENDING',
+                            progress: 0.0,
+                            x: 100.0 * j,
+                            y: 200.0 * i,
+                            color: '#4F46E5',
+                            productionLineId: line.id,
+                            createdBy: 'test-user-id',
+                            reason: `Performance test process ${i}-${j}`,
+                        },
+                    });
+                }
+            }
+        });
+        afterEach(async () => {
+            await prisma.process.deleteMany({
+                where: {
+                    title: {
+                        contains: 'perf-test-',
+                    },
+                },
+            });
+            await prisma.productionLine.deleteMany({
+                where: {
+                    name: {
+                        contains: 'perf-test-',
+                    },
+                },
+            });
+        });
+        it('should prevent N+1 queries with DataLoader (PERF-001)', async () => {
+            const query = `
+        query ProductionLinesWithProcesses {
+          productionLines(limit: 3) {
+            id
+            name
+            status
+            processes {
+              id
+              title
+              status
+            }
+          }
+        }
+      `;
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${operatorToken}`)
+                .send({
+                query,
+            })
+                .expect(200);
+            expect(response.body.errors).toBeUndefined();
+            expect(response.body.data.productionLines).toBeDefined();
+            expect(response.body.data.productionLines).toHaveLength(3);
+            response.body.data.productionLines.forEach((line, index) => {
+                expect(line.processes).toBeDefined();
+                expect(line.processes).toHaveLength(2);
+                line.processes.forEach(process => {
+                    expect(process.id).toBeDefined();
+                    expect(process.title).toBeDefined();
+                    expect(process.status).toBeDefined();
+                });
+            });
+        });
+        it('should correctly map children to parents with DataLoader (PERF-002)', async () => {
+            const query = `
+        query ProductionLinesWithCorrectMapping {
+          productionLines {
+            id
+            name
+            processes {
+              id
+              title
+              description
+            }
+          }
+        }
+      `;
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${operatorToken}`)
+                .send({
+                query,
+            })
+                .expect(200);
+            expect(response.body.errors).toBeUndefined();
+            expect(response.body.data.productionLines).toBeDefined();
+            for (const line of response.body.data.productionLines) {
+                if (line.name.includes('perf-test-')) {
+                    expect(line.processes).toHaveLength(2);
+                    line.processes.forEach((process) => {
+                        expect(process.title).toMatch(/perf-test-process-\d+-\d+/);
+                    });
+                    const dbProcesses = await prisma.process.findMany({
+                        where: { productionLineId: line.id },
+                    });
+                    expect(dbProcesses).toHaveLength(2);
+                    const returnedProcessIds = line.processes.map(p => p.id).sort();
+                    const dbProcessIds = dbProcesses.map(p => p.id).sort();
+                    expect(returnedProcessIds).toEqual(dbProcessIds);
+                }
+            }
+        });
+        it('should handle processCount field resolver efficiently', async () => {
+            const query = `
+        query ProductionLinesWithProcessCount {
+          productionLines {
+            id
+            name
+            processCount
+            processes {
+              id
+              title
+            }
+          }
+        }
+      `;
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${operatorToken}`)
+                .send({
+                query,
+            })
+                .expect(200);
+            expect(response.body.errors).toBeUndefined();
+            expect(response.body.data.productionLines).toBeDefined();
+            response.body.data.productionLines.forEach(line => {
+                if (line.name.includes('perf-test-')) {
+                    expect(line.processCount).toBe(2);
+                    expect(line.processes).toHaveLength(2);
+                }
+            });
+        });
+    });
+    describe('Architecture Compliance - SRP (Single Responsibility Principle)', () => {
+        it('should not have cross-entity methods in ProductionLineService (ARCH-001)', () => {
+            const productionLineService = app.get('ProductionLineService');
+            expect(productionLineService.findProcessesByProductionLine).toBeUndefined();
+            expect(productionLineService.createProcess).toBeUndefined();
+            expect(productionLineService.updateProcess).toBeUndefined();
+            expect(productionLineService.removeProcess).toBeUndefined();
+            expect(productionLineService.getProcessCount).toBeUndefined();
+            expect(productionLineService.findAll).toBeDefined();
+            expect(productionLineService.findOne).toBeDefined();
+            expect(productionLineService.create).toBeDefined();
+            expect(productionLineService.update).toBeDefined();
+            expect(productionLineService.remove).toBeDefined();
+        });
+        it('should not have cross-entity top-level queries in ProductionLineResolver (ARCH-002)', async () => {
+            const invalidQuery = `
+        query {
+          processesByProductionLine(productionLineId: "test-id") {
+            id
+            title
+          }
+        }
+      `;
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${operatorToken}`)
+                .send({
+                query: invalidQuery,
+            })
+                .expect(200);
+            expect(response.body.errors).toBeDefined();
+            expect(response.body.errors[0].message).toContain('Cannot query field');
+            const validQuery = `
+        query {
+          productionLines(limit: 1) {
+            id
+            name
+            processes {
+              id
+              title
+            }
+          }
+        }
+      `;
+            const validResponse = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${operatorToken}`)
+                .send({
+                query: validQuery,
+            })
+                .expect(200);
+            expect(validResponse.body.errors).toBeUndefined();
+            expect(validResponse.body.data.productionLines).toBeDefined();
         });
     });
 });

@@ -2,8 +2,9 @@ import { Module } from '@nestjs/common';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { TerminusModule } from '@nestjs/terminus';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { Request, Response } from 'express';
 import { HealthModule } from './health';
 import { ConfigModule, ConfigService } from './config';
 import { PrismaModule } from './database';
@@ -21,30 +22,39 @@ import { PrismaService } from './database/prisma.service';
   imports: [
     ConfigModule,
     PrismaModule,
-    ThrottlerModule.forRoot([{
-      ttl: 60000, // 1 minute
-      limit: 5, // 5 requests per minute per IP
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 1 minute
+        limit: 5, // 5 requests per minute per IP
+      },
+    ]),
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
       inject: [ConfigService, PrismaService],
-      useFactory: (configService: ConfigService, prismaService: PrismaService) => ({
+      useFactory: (
+        configService: ConfigService,
+        prismaService: PrismaService,
+      ) => ({
         autoSchemaFile: true,
         sortSchema: true,
         playground: configService.isDevelopment,
         introspection: true,
-        context: ({ req, res }: { req: any; res: any }) => {
-          const productionLineDataLoader = new ProductionLineDataLoader(prismaService);
+        context: ({ req, res }: { req: Request; res: Response }) => {
+          const productionLineDataLoader = new ProductionLineDataLoader(
+            prismaService,
+          );
           const processDataLoader = new ProcessDataLoader(prismaService);
 
           return {
             req,
             res,
             dataloaders: {
-              productionLineLoader: productionLineDataLoader.createProductionLineLoader(),
+              productionLineLoader:
+                productionLineDataLoader.createProductionLineLoader(),
               processLoader: processDataLoader.createProcessLoader(),
               userLoader: processDataLoader.createUserLoader(),
-              processesByProductionLineLoader: productionLineDataLoader.createProcessesByProductionLineLoader(),
+              processesByProductionLineLoader:
+                productionLineDataLoader.createProcessesByProductionLineLoader(),
             },
           };
         },

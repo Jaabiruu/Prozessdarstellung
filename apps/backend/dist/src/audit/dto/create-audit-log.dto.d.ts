@@ -1,4 +1,9 @@
 import { AuditAction } from '../../common/enums/user-role.enum';
+interface AuditDetails {
+    changes?: Record<string, unknown>;
+    previousValues?: Record<string, unknown>;
+    [key: string]: unknown;
+}
 export declare class CreateAuditLogDto {
     userId: string;
     action: AuditAction;
@@ -7,5 +12,6 @@ export declare class CreateAuditLogDto {
     reason: string;
     ipAddress?: string | null;
     userAgent?: string | null;
-    details?: Record<string, any> | null;
+    details?: AuditDetails | null;
 }
+export {};

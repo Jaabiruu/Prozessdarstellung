@@ -55,17 +55,20 @@ const bcrypt = __importStar(require("bcrypt"));
 const uuid_1 = require("uuid");
 const ioredis_1 = __importDefault(require("ioredis"));
 const user_role_enum_1 = require("../common/enums/user-role.enum");
+const audit_service_1 = require("../audit/audit.service");
 let AuthService = AuthService_1 = class AuthService {
     prisma;
     jwtService;
     config;
+    auditService;
     logger = new common_1.Logger(AuthService_1.name);
     redis;
     JWT_BLOCKLIST_PREFIX = 'jwt:blocklist:';
-    constructor(prisma, jwtService, config) {
+    constructor(prisma, jwtService, config, auditService) {
         this.prisma = prisma;
         this.jwtService = jwtService;
         this.config = config;
+        this.auditService = auditService;
         this.redis = new ioredis_1.default(this.config.redis.url);
     }
     async login(loginInput, ipAddress, userAgent) {
@@ -73,7 +76,10 @@ let AuthService = AuthService_1 = class AuthService {
         try {
             const user = await this.validateUser(email, password);
             if (!user.isActive) {
-                this.logger.warn('Login attempt for inactive user', { email, ipAddress });
+                this.logger.warn('Login attempt for inactive user', {
+                    email,
+                    ipAddress,
+                });
                 throw new common_1.UnauthorizedException('Account is inactive');
             }
             const jti = (0, uuid_1.v4)();
@@ -82,11 +88,9 @@ let AuthService = AuthService_1 = class AuthService {
                 email: user.email,
                 role: user.role,
                 jti,
-                iat: Math.floor(Date.now() / 1000),
-                exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60),
             };
             const accessToken = this.jwtService.sign(payload);
-            await this.createAuditLog({
+            await this.auditService.create({
                 userId: user.id,
                 action: user_role_enum_1.AuditAction.VIEW,
                 entityType: 'Authentication',
@@ -95,7 +99,10 @@ let AuthService = AuthService_1 = class AuthService {
                 ipAddress: ipAddress || null,
                 userAgent: userAgent || null,
             });
-            this.logger.log('User logged in successfully', { userId: user.id, email });
+            this.logger.log('User logged in successfully', {
+                userId: user.id,
+                email,
+            });
             return {
                 user: {
                     id: user.id,
@@ -116,19 +123,24 @@ let AuthService = AuthService_1 = class AuthService {
             throw error;
         }
     }
-    async logout(jti, userId) {
+    async logout(jti, userId, ipAddress, userAgent) {
         try {
             const key = `${this.JWT_BLOCKLIST_PREFIX}${jti}`;
             const expirationTime = 24 * 60 * 60;
             await this.redis.setex(key, expirationTime, 'blocked');
-            await this.createAuditLog({
+            await this.auditService.create({
                 userId,
                 action: user_role_enum_1.AuditAction.VIEW,
                 entityType: 'Authentication',
                 entityId: userId,
                 reason: 'User logout',
+                ipAddress,
+                userAgent,
             });
-            this.logger.log('User logged out successfully', { userId, jti: jti.substring(0, 8) });
+            this.logger.log('User logged out successfully', {
+                userId,
+                jti: jti.substring(0, 8),
+            });
             return true;
         }
         catch (error) {
@@ -240,30 +252,10 @@ let AuthService = AuthService_1 = class AuthService {
             return this.jwtService.decode(token);
         }
         catch (error) {
-            this.logger.error('Token decode failed', { error: error instanceof Error ? error.message : 'Unknown error' });
-            return null;
-        }
-    }
-    async createAuditLog(auditData) {
-        try {
-            await this.prisma.auditLog.create({
-                data: auditData,
-            });
-        }
-        catch (error) {
-            if (error.code === 'P2002') {
-                this.logger.warn('Audit log constraint violation', {
-                    userId: auditData.userId,
-                    action: auditData.action,
-                    constraint: error.meta?.target,
-                });
-                throw new common_1.ConflictException('Audit log already exists for this operation');
-            }
-            this.logger.error('Failed to create audit log', {
-                userId: auditData.userId,
-                action: auditData.action,
+            this.logger.error('Token decode failed', {
                 error: error instanceof Error ? error.message : 'Unknown error',
             });
+            return null;
         }
     }
 };
@@ -272,6 +264,7 @@ exports.AuthService = AuthService = AuthService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         jwt_1.JwtService,
-        config_service_1.ConfigService])
+        config_service_1.ConfigService,
+        audit_service_1.AuditService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

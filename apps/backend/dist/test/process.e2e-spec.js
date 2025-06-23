@@ -625,12 +625,184 @@ describe('Process Entity CRUD Operations (E2E)', () => {
             });
             expect(auditLog).toBeDefined();
             expect(auditLog.reason).toBe(reason);
-            expect(auditLog.details.changes).toMatchObject({
+            const details = auditLog.details;
+            expect(details.changes).toMatchObject({
                 title: 'Updated title for audit test',
             });
-            expect(auditLog.details.previousValues).toMatchObject({
+            expect(details.previousValues).toMatchObject({
                 title: 'test-audit-update-process',
             });
+        });
+    });
+    describe('Atomicity & Race Condition Tests', () => {
+        it('should prevent race conditions during concurrent Process creates (ATOM-004)', async () => {
+            const createMutation = `
+        mutation CreateProcess($input: CreateProcessInput!) {
+          createProcess(input: $input) {
+            id
+            title
+          }
+        }
+      `;
+            const input = {
+                title: 'RACE_TEST_PROCESS',
+                description: 'Race condition test process',
+                productionLineId: testProductionLineId,
+                status: 'PENDING',
+                progress: 0,
+                reason: 'Race condition test',
+            };
+            const [result1, result2] = await Promise.allSettled([
+                (0, supertest_1.default)(app.getHttpServer())
+                    .post('/graphql')
+                    .set('Authorization', `Bearer ${operatorToken}`)
+                    .send({
+                    query: createMutation,
+                    variables: { input },
+                }),
+                (0, supertest_1.default)(app.getHttpServer())
+                    .post('/graphql')
+                    .set('Authorization', `Bearer ${operatorToken}`)
+                    .send({
+                    query: createMutation,
+                    variables: { input },
+                }),
+            ]);
+            const responses = [result1, result2];
+            const successCount = responses.filter(r => r.status === 'fulfilled' && r.value.status === 200 && !r.value.body.errors).length;
+            const errorCount = responses.filter(r => (r.status === 'fulfilled' && (r.value.status !== 200 || r.value.body.errors)) ||
+                r.status === 'rejected').length;
+            expect(successCount).toBe(1);
+            expect(errorCount).toBe(1);
+            const records = await prisma.process.findMany({
+                where: { title: 'RACE_TEST_PROCESS' },
+            });
+            expect(records).toHaveLength(1);
+        });
+        it('should handle P2002 errors correctly for title uniqueness (ATOM-005)', async () => {
+            const createMutation = `
+        mutation CreateProcess($input: CreateProcessInput!) {
+          createProcess(input: $input) {
+            id
+            title
+          }
+        }
+      `;
+            await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${operatorToken}`)
+                .send({
+                query: createMutation,
+                variables: {
+                    input: {
+                        title: 'P2002_TEST_PROCESS',
+                        description: 'First process for P2002 test',
+                        productionLineId: testProductionLineId,
+                        status: 'PENDING',
+                        progress: 0,
+                        reason: 'First process for P2002 test',
+                    },
+                },
+            });
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${operatorToken}`)
+                .send({
+                query: createMutation,
+                variables: {
+                    input: {
+                        title: 'P2002_TEST_PROCESS',
+                        description: 'Should fail due to duplicate title',
+                        productionLineId: testProductionLineId,
+                        status: 'IN_PROGRESS',
+                        progress: 50,
+                        reason: 'Should fail due to duplicate title',
+                    },
+                },
+            })
+                .expect(200);
+            expect(response.body.errors).toBeDefined();
+            expect(response.body.errors[0].message).toContain('already exists');
+            expect(response.body.data.createProcess).toBeNull();
+        });
+        it('should maintain transaction integrity during Process operations', async () => {
+            const initialCount = await prisma.process.count();
+            const initialAuditCount = await prisma.auditLog.count();
+            const createMutation = `
+        mutation CreateProcess($input: CreateProcessInput!) {
+          createProcess(input: $input) {
+            id
+            title
+            description
+          }
+        }
+      `;
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${operatorToken}`)
+                .send({
+                query: createMutation,
+                variables: {
+                    input: {
+                        title: 'TRANSACTION_INTEGRITY_PROCESS',
+                        description: 'Testing transaction integrity',
+                        productionLineId: testProductionLineId,
+                        status: 'PENDING',
+                        progress: 0,
+                        reason: 'Testing transaction integrity',
+                    },
+                },
+            })
+                .expect(200);
+            const processId = response.body.data.createProcess.id;
+            const finalCount = await prisma.process.count();
+            const finalAuditCount = await prisma.auditLog.count();
+            expect(finalCount).toBe(initialCount + 1);
+            expect(finalAuditCount).toBeGreaterThan(initialAuditCount);
+            const auditLog = await prisma.auditLog.findFirst({
+                where: {
+                    entityType: 'Process',
+                    entityId: processId,
+                    action: 'CREATE',
+                },
+            });
+            expect(auditLog).toBeDefined();
+            expect(auditLog.reason).toBe('Testing transaction integrity');
+        });
+        it('should handle transaction rollback on process creation failure', async () => {
+            const initialCount = await prisma.process.count();
+            const initialAuditCount = await prisma.auditLog.count();
+            const createMutation = `
+        mutation CreateProcess($input: CreateProcessInput!) {
+          createProcess(input: $input) {
+            id
+            title
+          }
+        }
+      `;
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${operatorToken}`)
+                .send({
+                query: createMutation,
+                variables: {
+                    input: {
+                        title: 'INVALID_FK_PROCESS',
+                        description: 'Should fail due to invalid production line',
+                        productionLineId: 'non-existent-production-line-id',
+                        status: 'PENDING',
+                        progress: 0,
+                        reason: 'Testing transaction rollback',
+                    },
+                },
+            })
+                .expect(200);
+            expect(response.body.errors).toBeDefined();
+            expect(response.body.data.createProcess).toBeNull();
+            const finalCount = await prisma.process.count();
+            const finalAuditCount = await prisma.auditLog.count();
+            expect(finalCount).toBe(initialCount);
+            expect(finalAuditCount).toBe(initialAuditCount);
         });
     });
 });

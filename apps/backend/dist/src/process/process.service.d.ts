@@ -17,12 +17,6 @@ export declare class ProcessService {
         productionLineId?: string;
     }): Promise<Process[]>;
     findOne(id: string): Promise<Process>;
-    findAllByProductionLine(productionLineId: string, options?: {
-        limit?: number;
-        offset?: number;
-        isActive?: boolean;
-        status?: ProcessStatus;
-    }): Promise<Process[]>;
     update(updateProcessInput: UpdateProcessInput, currentUserId: string, ipAddress?: string, userAgent?: string): Promise<Process>;
     remove(id: string, reason: string, currentUserId: string, ipAddress?: string, userAgent?: string): Promise<Process>;
 }

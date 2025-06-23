@@ -110,7 +110,9 @@ let UserService = UserService_1 = class UserService {
         try {
             const users = await this.prisma.user.findMany({
                 where: {
-                    ...(options?.isActive !== undefined && { isActive: options.isActive }),
+                    ...(options?.isActive !== undefined && {
+                        isActive: options.isActive,
+                    }),
                     ...(options?.role && { role: options.role }),
                 },
                 orderBy: {
@@ -158,7 +160,8 @@ let UserService = UserService_1 = class UserService {
                 if (!existingUser) {
                     throw new common_1.NotFoundException(`User with ID ${updateUserInput.id} not found`);
                 }
-                if (updateUserInput.role && updateUserInput.role !== existingUser.role) {
+                if (updateUserInput.role &&
+                    updateUserInput.role !== existingUser.role) {
                     if (currentUserRole !== user_role_enum_1.UserRole.ADMIN) {
                         throw new common_1.ForbiddenException('Only administrators can change user roles');
                     }
@@ -347,7 +350,8 @@ let UserService = UserService_1 = class UserService {
             };
         }
         catch (error) {
-            if (error instanceof Error && error.message.includes('Intentional rollback')) {
+            if (error instanceof Error &&
+                error.message.includes('Intentional rollback')) {
                 return {
                     success: false,
                     message: 'Transaction rolled back as expected',

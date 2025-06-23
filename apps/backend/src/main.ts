@@ -5,11 +5,11 @@ import { ConfigService } from './config';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  
+
   try {
     const app = await NestFactory.create(AppModule);
     const configService = app.get(ConfigService);
-    
+
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -28,7 +28,7 @@ async function bootstrap() {
 
     const port = configService.port;
     await app.listen(port);
-    
+
     logger.log(`🚀 Pharmaceutical Backend running on http://localhost:${port}`);
     logger.log(`📊 GraphQL Playground: http://localhost:${port}/graphql`);
     logger.log(`🏥 Health Check: http://localhost:${port}/health`);

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -7,11 +40,14 @@ const testing_1 = require("@nestjs/testing");
 const app_module_1 = require("../src/app.module");
 const setup_1 = require("./setup");
 const supertest_1 = __importDefault(require("supertest"));
+const jwt = __importStar(require("jsonwebtoken"));
+const bcrypt = __importStar(require("bcrypt"));
 describe('Authentication System (E2E)', () => {
     let app;
     let prisma;
     let redis;
     beforeAll(async () => {
+        await setup_1.TestSetup.beforeAll();
         const moduleFixture = await testing_1.Test.createTestingModule({
             imports: [app_module_1.AppModule],
         }).compile();
@@ -22,6 +58,7 @@ describe('Authentication System (E2E)', () => {
     });
     afterAll(async () => {
         await app.close();
+        await setup_1.TestSetup.afterAll();
     });
     describe('AUTH-001: User can log in with valid credentials', () => {
         it('should return 200 OK with valid accessToken and user object', async () => {
@@ -60,7 +97,6 @@ describe('Authentication System (E2E)', () => {
             });
             expect(response.body.data.login.accessToken).toBeDefined();
             expect(typeof response.body.data.login.accessToken).toBe('string');
-            const jwt = require('jsonwebtoken');
             const decoded = jwt.decode(response.body.data.login.accessToken);
             expect(decoded).toMatchObject({
                 email: 'admin@test.local',
@@ -132,10 +168,10 @@ describe('Authentication System (E2E)', () => {
     });
     describe('AUTH-004: User cannot log in with deactivated account', () => {
         it('should return UnauthorizedException for inactive user', async () => {
-            const deactivatedUser = await prisma.user.create({
+            await prisma.user.create({
                 data: {
                     email: 'deactivated@test.local',
-                    password: await require('bcrypt').hash('password123', 12),
+                    password: await bcrypt.hash('password123', 12),
                     firstName: 'Deactivated',
                     lastName: 'User',
                     role: 'OPERATOR',
@@ -231,7 +267,6 @@ describe('Authentication System (E2E)', () => {
             })
                 .expect(200);
             const token = loginResponse.body.data.login.accessToken;
-            const jwt = require('jsonwebtoken');
             const decoded = jwt.decode(token);
             const jti = decoded.jti;
             const logoutMutation = `
@@ -306,7 +341,6 @@ describe('Authentication System (E2E)', () => {
     });
     describe('AUTH-008: Expired token is rejected', () => {
         it('should return UnauthorizedException for expired token', async () => {
-            const jwt = require('jsonwebtoken');
             const expiredPayload = {
                 sub: 'test-user-id',
                 email: 'admin@test.local',
@@ -335,5 +369,167 @@ describe('Authentication System (E2E)', () => {
             expect(response.body.errors[0].message).toContain('jwt expired');
         });
     });
+    describe('DRY Principle & Architectural Compliance', () => {
+        it('should correctly extract IP and User-Agent via @AuditContext decorator (ARCH-003)', async () => {
+            const loginMutation = `
+        mutation Login($input: LoginInput!) {
+          login(input: $input) {
+            accessToken
+          }
+        }
+      `;
+            const loginResponse = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .send({
+                query: loginMutation,
+                variables: {
+                    input: {
+                        email: 'admin@test.local',
+                        password: 'admin123',
+                    },
+                },
+            });
+            const token = loginResponse.body.data.login.accessToken;
+            const updateUserMutation = `
+        mutation UpdateUser($input: UpdateUserInput!) {
+          updateUser(input: $input) {
+            id
+            firstName
+          }
+        }
+      `;
+            const adminUser = await prisma.user.findUnique({
+                where: { email: 'admin@test.local' },
+            });
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${token}`)
+                .set('X-Forwarded-For', '192.168.1.100')
+                .set('User-Agent', 'Test-Agent/1.0')
+                .send({
+                query: updateUserMutation,
+                variables: {
+                    input: {
+                        id: adminUser.id,
+                        firstName: 'Updated',
+                        reason: 'Testing @AuditContext decorator extraction',
+                    },
+                },
+            })
+                .expect(200);
+            expect(response.body.errors).toBeUndefined();
+            expect(response.body.data.updateUser).toBeDefined();
+            const auditLog = await prisma.auditLog.findFirst({
+                where: {
+                    entityType: 'User',
+                    entityId: adminUser.id,
+                    action: 'UPDATE',
+                    reason: 'Testing @AuditContext decorator extraction',
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            expect(auditLog).toBeDefined();
+            expect(auditLog.ipAddress).toBe('192.168.1.100');
+            expect(auditLog.userAgent).toBe('Test-Agent/1.0');
+        });
+    });
+    describe('Authentication-Related Atomicity Tests', () => {
+        it('should handle authentication transaction integrity', async () => {
+            const initialAuditCount = await prisma.auditLog.count();
+            const loginMutation = `
+        mutation Login($input: LoginInput!) {
+          login(input: $input) {
+            user {
+              id
+              email
+            }
+            accessToken
+          }
+        }
+      `;
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('X-Forwarded-For', '192.168.1.50')
+                .set('User-Agent', 'Auth-Test-Agent/1.0')
+                .send({
+                query: loginMutation,
+                variables: {
+                    input: {
+                        email: 'admin@test.local',
+                        password: 'admin123',
+                    },
+                },
+            })
+                .expect(200);
+            expect(response.body.data.login).toBeDefined();
+            expect(response.body.data.login.accessToken).toBeDefined();
+            const finalAuditCount = await prisma.auditLog.count();
+            expect(finalAuditCount).toBeGreaterThan(initialAuditCount);
+        });
+        it('should handle P2002 errors in authentication context', async () => {
+            const createUserMutation = `
+        mutation CreateUser($input: CreateUserInput!) {
+          createUser(input: $input) {
+            id
+            email
+          }
+        }
+      `;
+            const adminToken = await getAuthToken('admin@test.local', 'admin123');
+            await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({
+                query: createUserMutation,
+                variables: {
+                    input: {
+                        email: 'auth-p2002-test@example.com',
+                        password: 'password123',
+                        firstName: 'Auth',
+                        lastName: 'P2002Test',
+                        role: 'OPERATOR',
+                        reason: 'First user for auth P2002 test',
+                    },
+                },
+            });
+            const response = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({
+                query: createUserMutation,
+                variables: {
+                    input: {
+                        email: 'auth-p2002-test@example.com',
+                        password: 'different123',
+                        firstName: 'Auth',
+                        lastName: 'Duplicate',
+                        role: 'OPERATOR',
+                        reason: 'Should fail due to duplicate',
+                    },
+                },
+            })
+                .expect(200);
+            expect(response.body.errors).toBeDefined();
+            expect(response.body.errors[0].message).toContain('already exists');
+        });
+    });
+    async function getAuthToken(email, password) {
+        const loginMutation = `
+      mutation Login($input: LoginInput!) {
+        login(input: $input) {
+          accessToken
+        }
+      }
+    `;
+        const response = await (0, supertest_1.default)(app.getHttpServer())
+            .post('/graphql')
+            .send({
+            query: loginMutation,
+            variables: {
+                input: { email, password },
+            },
+        });
+        return response.body.data.login.accessToken;
+    }
 });
 //# sourceMappingURL=auth.e2e-spec.js.map

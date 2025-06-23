@@ -1,7 +1,7 @@
 import DataLoader from 'dataloader';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { ProductionLine } from '@prisma/client';
+import { ProductionLine, Process } from '@prisma/client';
 
 @Injectable()
 export class ProductionLineDataLoader {
@@ -35,7 +35,7 @@ export class ProductionLineDataLoader {
 
         // Create a map for efficient lookup
         const productionLineMap = new Map(
-          productionLines.map(pl => [pl.id, pl])
+          productionLines.map(pl => [pl.id, pl]),
         );
 
         // Return results in the same order as input IDs
@@ -44,13 +44,13 @@ export class ProductionLineDataLoader {
       {
         cache: true, // Enable caching
         maxBatchSize: 100, // Batch up to 100 items
-      }
+      },
     );
   }
 
   // DataLoader for fetching processes by production line IDs
-  createProcessesByProductionLineLoader(): DataLoader<string, any[]> {
-    return new DataLoader<string, any[]>(
+  createProcessesByProductionLineLoader(): DataLoader<string, Process[]> {
+    return new DataLoader<string, Process[]>(
       async (productionLineIds: readonly string[]) => {
         const processes = await this.prisma.process.findMany({
           where: {
@@ -74,8 +74,8 @@ export class ProductionLineDataLoader {
         });
 
         // Group processes by production line ID
-        const processesMap = new Map<string, any[]>();
-        
+        const processesMap = new Map<string, Process[]>();
+
         // Initialize empty arrays for all production line IDs
         productionLineIds.forEach(id => {
           processesMap.set(id, []);
@@ -94,7 +94,7 @@ export class ProductionLineDataLoader {
       {
         cache: true,
         maxBatchSize: 100,
-      }
+      },
     );
   }
 }

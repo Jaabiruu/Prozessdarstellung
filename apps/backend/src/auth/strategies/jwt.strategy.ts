@@ -33,7 +33,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      
+
       // Log unexpected errors but return generic message
       console.error('JWT strategy validation error:', error);
       throw new UnauthorizedException('Token validation failed');

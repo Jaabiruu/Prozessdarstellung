@@ -3,13 +3,19 @@ import { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { TestSetup } from './setup';
 import request from 'supertest';
+import * as jwt from 'jsonwebtoken';
+import * as bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
+import Redis from 'ioredis';
 
 describe('Authentication System (E2E)', () => {
   let app: INestApplication;
-  let prisma: any;
-  let redis: any;
+  let prisma: PrismaClient;
+  let redis: Redis;
 
   beforeAll(async () => {
+    await TestSetup.beforeAll();
+    
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -23,6 +29,7 @@ describe('Authentication System (E2E)', () => {
 
   afterAll(async () => {
     await app.close();
+    await TestSetup.afterAll();
   });
 
   describe('AUTH-001: User can log in with valid credentials', () => {
@@ -66,8 +73,9 @@ describe('Authentication System (E2E)', () => {
       expect(typeof response.body.data.login.accessToken).toBe('string');
 
       // Verify token payload
-      const jwt = require('jsonwebtoken');
-      const decoded = jwt.decode(response.body.data.login.accessToken);
+      const decoded = jwt.decode(
+        response.body.data.login.accessToken,
+      ) as jwt.JwtPayload;
       expect(decoded).toMatchObject({
         email: 'admin@test.local',
         role: 'ADMIN',
@@ -149,10 +157,10 @@ describe('Authentication System (E2E)', () => {
   describe('AUTH-004: User cannot log in with deactivated account', () => {
     it('should return UnauthorizedException for inactive user', async () => {
       // First, create and deactivate a user
-      const deactivatedUser = await prisma.user.create({
+      await prisma.user.create({
         data: {
           email: 'deactivated@test.local',
-          password: await require('bcrypt').hash('password123', 12),
+          password: await bcrypt.hash('password123', 12),
           firstName: 'Deactivated',
           lastName: 'User',
           role: 'OPERATOR',
@@ -222,11 +230,15 @@ describe('Authentication System (E2E)', () => {
         if (i < 5) {
           // First 5 attempts should fail with auth error
           expect(response.body.errors).toBeDefined();
-          expect(response.body.errors[0].message).toContain('Invalid credentials');
+          expect(response.body.errors[0].message).toContain(
+            'Invalid credentials',
+          );
         } else {
           // 6th attempt should be rate limited
           expect(response.body.errors).toBeDefined();
-          expect(response.body.errors[0].message).toContain('ThrottlerException');
+          expect(response.body.errors[0].message).toContain(
+            'ThrottlerException',
+          );
         }
       }
     });
@@ -260,8 +272,7 @@ describe('Authentication System (E2E)', () => {
         .expect(200);
 
       const token = loginResponse.body.data.login.accessToken;
-      const jwt = require('jsonwebtoken');
-      const decoded = jwt.decode(token);
+      const decoded = jwt.decode(token) as jwt.JwtPayload;
       const jti = decoded.jti;
 
       // Now log out
@@ -356,7 +367,6 @@ describe('Authentication System (E2E)', () => {
   describe('AUTH-008: Expired token is rejected', () => {
     it('should return UnauthorizedException for expired token', async () => {
       // Create an expired token
-      const jwt = require('jsonwebtoken');
       const expiredPayload = {
         sub: 'test-user-id',
         email: 'admin@test.local',
@@ -389,4 +399,202 @@ describe('Authentication System (E2E)', () => {
       expect(response.body.errors[0].message).toContain('jwt expired');
     });
   });
+
+  describe('DRY Principle & Architectural Compliance', () => {
+    it('should correctly extract IP and User-Agent via @AuditContext decorator (ARCH-003)', async () => {
+      // First get a token for authenticated operations
+      const loginMutation = `
+        mutation Login($input: LoginInput!) {
+          login(input: $input) {
+            accessToken
+          }
+        }
+      `;
+
+      const loginResponse = await request(app.getHttpServer())
+        .post('/graphql')
+        .send({
+          query: loginMutation,
+          variables: {
+            input: {
+              email: 'admin@test.local',
+              password: 'admin123',
+            },
+          },
+        });
+
+      const token = loginResponse.body.data.login.accessToken;
+
+      // Test a mutation that uses @AuditContext decorator (user update)
+      const updateUserMutation = `
+        mutation UpdateUser($input: UpdateUserInput!) {
+          updateUser(input: $input) {
+            id
+            firstName
+          }
+        }
+      `;
+
+      // Get the admin user ID for the update
+      const adminUser = await prisma.user.findUnique({
+        where: { email: 'admin@test.local' },
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${token}`)
+        .set('X-Forwarded-For', '192.168.1.100')
+        .set('User-Agent', 'Test-Agent/1.0')
+        .send({
+          query: updateUserMutation,
+          variables: {
+            input: {
+              id: adminUser.id,
+              firstName: 'Updated',
+              reason: 'Testing @AuditContext decorator extraction',
+            },
+          },
+        })
+        .expect(200);
+
+      expect(response.body.errors).toBeUndefined();
+      expect(response.body.data.updateUser).toBeDefined();
+
+      // Verify audit log was created with correct IP and User-Agent
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'User',
+          entityId: adminUser.id,
+          action: 'UPDATE',
+          reason: 'Testing @AuditContext decorator extraction',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(auditLog).toBeDefined();
+      expect(auditLog!.ipAddress).toBe('192.168.1.100');
+      expect(auditLog!.userAgent).toBe('Test-Agent/1.0');
+      
+      // This test verifies that the @AuditContext decorator successfully
+      // extracts IP and User-Agent from the GraphQL context without
+      // repetitive code in every resolver method
+    });
+  });
+
+  describe('Authentication-Related Atomicity Tests', () => {
+    it('should handle authentication transaction integrity', async () => {
+      const initialAuditCount = await prisma.auditLog.count();
+
+      const loginMutation = `
+        mutation Login($input: LoginInput!) {
+          login(input: $input) {
+            user {
+              id
+              email
+            }
+            accessToken
+          }
+        }
+      `;
+
+      const response = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('X-Forwarded-For', '192.168.1.50')
+        .set('User-Agent', 'Auth-Test-Agent/1.0')
+        .send({
+          query: loginMutation,
+          variables: {
+            input: {
+              email: 'admin@test.local',
+              password: 'admin123',
+            },
+          },
+        })
+        .expect(200);
+
+      expect(response.body.data.login).toBeDefined();
+      expect(response.body.data.login.accessToken).toBeDefined();
+
+      // Verify audit log was created for successful login
+      const finalAuditCount = await prisma.auditLog.count();
+      expect(finalAuditCount).toBeGreaterThan(initialAuditCount);
+    });
+
+    it('should handle P2002 errors in authentication context', async () => {
+      // This test ensures authentication service properly handles
+      // unique constraint violations during user operations
+      const createUserMutation = `
+        mutation CreateUser($input: CreateUserInput!) {
+          createUser(input: $input) {
+            id
+            email
+          }
+        }
+      `;
+
+      // Get admin token first
+      const adminToken = await getAuthToken('admin@test.local', 'admin123');
+
+      // Create first user
+      await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: createUserMutation,
+          variables: {
+            input: {
+              email: 'auth-p2002-test@example.com',
+              password: 'password123',
+              firstName: 'Auth',
+              lastName: 'P2002Test',
+              role: 'OPERATOR',
+              reason: 'First user for auth P2002 test',
+            },
+          },
+        });
+
+      // Try to create duplicate
+      const response = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: createUserMutation,
+          variables: {
+            input: {
+              email: 'auth-p2002-test@example.com', // Duplicate
+              password: 'different123',
+              firstName: 'Auth',
+              lastName: 'Duplicate',
+              role: 'OPERATOR',
+              reason: 'Should fail due to duplicate',
+            },
+          },
+        })
+        .expect(200);
+
+      expect(response.body.errors).toBeDefined();
+      expect(response.body.errors[0].message).toContain('already exists');
+    });
+  });
+
+  async function getAuthToken(email: string, password: string): Promise<string> {
+    const loginMutation = `
+      mutation Login($input: LoginInput!) {
+        login(input: $input) {
+          accessToken
+        }
+      }
+    `;
+
+    const response = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: { email, password },
+        },
+      });
+
+    return response.body.data.login.accessToken;
+  }
 });

@@ -5,3 +5,4 @@ export * from './decorators/current-user.decorator';
 export * from './decorators/roles.decorator';
 export * from './decorators/public.decorator';
 export * from './decorators/audit-metadata.decorator';
+export * from './decorators/audit-context.decorator';

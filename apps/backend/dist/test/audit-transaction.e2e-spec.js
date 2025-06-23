@@ -133,8 +133,8 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
             expect(auditLog.ipAddress).toBeDefined();
             expect(auditLog.userAgent).toBeDefined();
             expect(auditLog.userAgent).toContain('audit-test-client');
-            expect(auditLog.timestamp).toBeDefined();
-            expect(new Date(auditLog.timestamp)).toBeInstanceOf(Date);
+            expect(auditLog.createdAt).toBeDefined();
+            expect(new Date(auditLog.createdAt)).toBeInstanceOf(Date);
             console.log('✅ Audit log created with all required fields for ProductionLine creation');
         });
         it('should create audit log with correct details for Process update', async () => {
@@ -184,12 +184,13 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
             });
             expect(auditLog).toBeDefined();
             expect(auditLog.reason).toBe(input.reason);
-            expect(auditLog.details.changes).toMatchObject({
+            const details = auditLog.details;
+            expect(details.changes).toMatchObject({
                 title: input.title,
                 description: input.description,
                 status: input.status,
             });
-            expect(auditLog.details.previousValues).toMatchObject({
+            expect(details.previousValues).toMatchObject({
                 title: 'audit-test-process-for-update',
                 description: 'Original description',
                 status: 'PENDING',
@@ -302,7 +303,9 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
         });
         it('should rollback ProductionLine creation when audit log creation fails', async () => {
             const originalCreate = auditService.create;
-            auditService.create = jest.fn().mockRejectedValue(new Error('Audit failure during creation'));
+            auditService.create = jest
+                .fn()
+                .mockRejectedValue(new Error('Audit failure during creation'));
             const productionLineService = app.get('ProductionLineService');
             await expect(productionLineService.create({
                 name: 'audit-test-should-not-exist',
@@ -459,7 +462,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
                     action: 'UPDATE',
                 },
                 orderBy: {
-                    timestamp: 'asc',
+                    createdAt: 'asc',
                 },
             });
             expect(auditLogs).toHaveLength(2);

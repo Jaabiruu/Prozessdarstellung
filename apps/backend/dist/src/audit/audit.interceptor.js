@@ -62,9 +62,14 @@ let AuditInterceptor = AuditInterceptor_1 = class AuditInterceptor {
             entityType: options.entityType,
             entityId,
             reason,
-            ipAddress: request.ip || request.connection?.remoteAddress || null,
+            ipAddress: request.ip ||
+                request
+                    .connection?.remoteAddress ||
+                null,
             userAgent: request.get('user-agent') || null,
-            details: options.includeDetails ? this.extractDetails(args, result) : null,
+            details: options.includeDetails
+                ? this.extractDetails(args, result)
+                : null,
         };
         await this.auditService.createFromContext(auditContext);
     }
@@ -72,22 +77,34 @@ let AuditInterceptor = AuditInterceptor_1 = class AuditInterceptor {
         if (options.extractEntityId) {
             return options.extractEntityId(args, result);
         }
-        if (result && result.id) {
+        if (result &&
+            typeof result === 'object' &&
+            result !== null &&
+            'id' in result) {
             return result.id;
         }
-        if (args.id) {
+        if (args.id && typeof args.id === 'string') {
             return args.id;
         }
-        if (args.input && args.input.id) {
+        if (args.input &&
+            typeof args.input === 'object' &&
+            args.input !== null &&
+            'id' in args.input) {
             return args.input.id;
         }
         throw new Error(`Cannot extract entity ID for audit log: ${options.entityType}`);
     }
     extractReason(args) {
-        if (args.input && args.input.reason) {
-            return args.input.reason;
+        if (args.input &&
+            typeof args.input === 'object' &&
+            args.input !== null &&
+            'reason' in args.input) {
+            const reason = args.input.reason;
+            if (typeof reason === 'string') {
+                return reason;
+            }
         }
-        if (args.reason) {
+        if (args.reason && typeof args.reason === 'string') {
             return args.reason;
         }
         throw new Error('Audit reason is required but not provided');
@@ -96,8 +113,15 @@ let AuditInterceptor = AuditInterceptor_1 = class AuditInterceptor {
         if (options.action) {
             return options.action;
         }
-        if (args.input && args.input.action) {
-            return args.input.action;
+        if (args.input &&
+            typeof args.input === 'object' &&
+            args.input !== null &&
+            'action' in args.input) {
+            const action = args.input.action;
+            if (typeof action === 'string' &&
+                Object.values(user_role_enum_1.AuditAction).includes(action)) {
+                return action;
+            }
         }
         const handlerName = args.constructor?.name || 'unknown';
         if (handlerName.toLowerCase().includes('create')) {
@@ -106,7 +130,8 @@ let AuditInterceptor = AuditInterceptor_1 = class AuditInterceptor {
         else if (handlerName.toLowerCase().includes('update')) {
             return user_role_enum_1.AuditAction.UPDATE;
         }
-        else if (handlerName.toLowerCase().includes('delete') || handlerName.toLowerCase().includes('remove')) {
+        else if (handlerName.toLowerCase().includes('delete') ||
+            handlerName.toLowerCase().includes('remove')) {
             return user_role_enum_1.AuditAction.DELETE;
         }
         else if (handlerName.toLowerCase().includes('approve')) {
@@ -130,7 +155,7 @@ let AuditInterceptor = AuditInterceptor_1 = class AuditInterceptor {
         const sanitized = { ...data };
         const sensitiveFields = ['password', 'token', 'secret', 'key'];
         for (const field of sensitiveFields) {
-            if (sanitized[field]) {
+            if (field in sanitized && sanitized[field]) {
                 sanitized[field] = '[REDACTED]';
             }
         }

@@ -1,3 +1,7 @@
+**🤖 AI INSTRUCTION**: This is a systematic handoff preparation process.
+  Follow ALL steps
+---
+
 # 🧹 CONTEXT WINDOW PREPARATION
 
 Prepare project for context window clearing by verifying documentation compliance.
@@ -5,7 +9,7 @@ Prepare project for context window clearing by verifying documentation complianc
 ## 📋 VERIFICATION CHECKLIST
 
 ### **File Compliance**
-- **CLAUDE.md**: AI context only (<100 lines)
+- **CLAUDE.md**: AI context only 
 - **README.md**: Project overview only (no implementation)
 - **COMPREHENSIVE_REBUILD_TODO.md**: Implementation reference only (no status)
 - **docs/**: Standards and status separated

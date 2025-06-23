@@ -23,6 +23,7 @@ const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
 const roles_guard_1 = require("../auth/guards/roles.guard");
 const current_user_decorator_1 = require("../common/decorators/current-user.decorator");
 const roles_decorator_1 = require("../common/decorators/roles.decorator");
+const audit_context_decorator_1 = require("../common/decorators/audit-context.decorator");
 const user_role_enum_1 = require("../common/enums/user-role.enum");
 let TransactionTestResult = class TransactionTestResult {
     success;
@@ -45,10 +46,8 @@ let UserResolver = class UserResolver {
     constructor(userService) {
         this.userService = userService;
     }
-    async createUser(createUserInput, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.userService.create(createUserInput, currentUser.id, ipAddress, userAgent);
+    async createUser(createUserInput, currentUser, auditContext) {
+        return this.userService.create(createUserInput, currentUser.id, auditContext.ipAddress, auditContext.userAgent);
     }
     async users(limit, offset, isActive, role) {
         return this.userService.findAll({
@@ -64,20 +63,14 @@ let UserResolver = class UserResolver {
     async me(currentUser) {
         return this.userService.findOne(currentUser.id);
     }
-    async updateUser(updateUserInput, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.userService.update(updateUserInput, currentUser.id, currentUser.role, ipAddress, userAgent);
+    async updateUser(updateUserInput, currentUser, auditContext) {
+        return this.userService.update(updateUserInput, currentUser.id, currentUser.role, auditContext.ipAddress, auditContext.userAgent);
     }
-    async deactivateUser(id, reason, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.userService.deactivate(id, reason, currentUser.id, ipAddress, userAgent);
+    async deactivateUser(id, reason, currentUser, auditContext) {
+        return this.userService.deactivate(id, reason, currentUser.id, auditContext.ipAddress, auditContext.userAgent);
     }
-    async changePassword(userId, newPassword, reason, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.userService.changePassword(userId, newPassword, reason, currentUser.id, ipAddress, userAgent);
+    async changePassword(userId, newPassword, reason, currentUser, auditContext) {
+        return this.userService.changePassword(userId, newPassword, reason, currentUser.id, auditContext.ipAddress, auditContext.userAgent);
     }
     async testTransactionRollback(testUserEmail, shouldFail, currentUser) {
         return this.userService.testTransactionRollback(testUserEmail, currentUser.id, shouldFail);
@@ -89,7 +82,7 @@ __decorate([
     (0, roles_decorator_1.Roles)(user_role_enum_1.UserRole.ADMIN),
     __param(0, (0, graphql_1.Args)('input')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
-    __param(2, (0, graphql_1.Context)()),
+    __param(2, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [create_user_input_1.CreateUserInput, Object, Object]),
     __metadata("design:returntype", Promise)
@@ -125,7 +118,7 @@ __decorate([
     (0, roles_decorator_1.Roles)(user_role_enum_1.UserRole.ADMIN, user_role_enum_1.UserRole.MANAGER),
     __param(0, (0, graphql_1.Args)('input')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
-    __param(2, (0, graphql_1.Context)()),
+    __param(2, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [update_user_input_1.UpdateUserInput, Object, Object]),
     __metadata("design:returntype", Promise)
@@ -136,7 +129,7 @@ __decorate([
     __param(0, (0, graphql_1.Args)('id')),
     __param(1, (0, graphql_1.Args)('reason')),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
-    __param(3, (0, graphql_1.Context)()),
+    __param(3, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, Object, Object]),
     __metadata("design:returntype", Promise)
@@ -147,7 +140,7 @@ __decorate([
     __param(1, (0, graphql_1.Args)('newPassword')),
     __param(2, (0, graphql_1.Args)('reason')),
     __param(3, (0, current_user_decorator_1.CurrentUser)()),
-    __param(4, (0, graphql_1.Context)()),
+    __param(4, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, String, Object, Object]),
     __metadata("design:returntype", Promise)

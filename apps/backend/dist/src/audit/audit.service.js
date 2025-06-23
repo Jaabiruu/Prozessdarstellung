@@ -28,16 +28,10 @@ let AuditService = AuditService_1 = class AuditService {
                 entityType: auditData.entityType,
                 entityId: auditData.entityId,
                 reason: auditData.reason,
+                ipAddress: auditData.ipAddress ?? undefined,
+                userAgent: auditData.userAgent ?? undefined,
+                details: auditData.details ?? undefined,
             };
-            if (auditData.ipAddress) {
-                createData.ipAddress = auditData.ipAddress;
-            }
-            if (auditData.userAgent) {
-                createData.userAgent = auditData.userAgent;
-            }
-            if (auditData.details) {
-                createData.details = auditData.details;
-            }
             const auditLog = await prismaClient.auditLog.create({
                 data: createData,
             });

@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateUserInput } from './dto/create-user.input';
 import { UpdateUserInput } from './dto/update-user.input';
-import { User } from '@prisma/client';
+import { User, Prisma } from '@prisma/client';
 import { AuditAction, UserRole } from '../common/enums/user-role.enum';
 import * as bcrypt from 'bcrypt';
 
@@ -25,7 +31,7 @@ export class UserService {
     try {
       const hashedPassword = await bcrypt.hash(createUserInput.password, 12);
 
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         const user = await tx.user.create({
           data: {
             email: createUserInput.email,
@@ -79,18 +85,18 @@ export class UserService {
     }
   }
 
-  async findAll(
-    options?: {
-      limit?: number;
-      offset?: number;
-      isActive?: boolean;
-      role?: string;
-    },
-  ): Promise<User[]> {
+  async findAll(options?: {
+    limit?: number;
+    offset?: number;
+    isActive?: boolean;
+    role?: string;
+  }): Promise<User[]> {
     try {
       const users = await this.prisma.user.findMany({
         where: {
-          ...(options?.isActive !== undefined && { isActive: options.isActive }),
+          ...(options?.isActive !== undefined && {
+            isActive: options.isActive,
+          }),
           ...(options?.role && { role: options.role }),
         },
         orderBy: {
@@ -124,7 +130,7 @@ export class UserService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      
+
       this.logger.error('Failed to fetch user', {
         userId: id,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -141,25 +147,32 @@ export class UserService {
     userAgent?: string,
   ): Promise<User> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         // Fetch existing user within transaction to get "before" state for audit
         const existingUser = await tx.user.findUnique({
           where: { id: updateUserInput.id },
         });
 
         if (!existingUser) {
-          throw new NotFoundException(`User with ID ${updateUserInput.id} not found`);
+          throw new NotFoundException(
+            `User with ID ${updateUserInput.id} not found`,
+          );
         }
 
         // Role change authorization check
-        if (updateUserInput.role && updateUserInput.role !== existingUser.role) {
+        if (
+          updateUserInput.role &&
+          updateUserInput.role !== existingUser.role
+        ) {
           if (currentUserRole !== UserRole.ADMIN) {
-            throw new ForbiddenException('Only administrators can change user roles');
+            throw new ForbiddenException(
+              'Only administrators can change user roles',
+            );
           }
         }
 
-        const updateData: any = {};
-        
+        const updateData: Prisma.UserUpdateInput = {};
+
         if (updateUserInput.firstName !== undefined) {
           updateData.firstName = updateUserInput.firstName;
         }
@@ -225,7 +238,7 @@ export class UserService {
     userAgent?: string,
   ): Promise<User> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         // Fetch existing user within transaction to get "before" state for audit
         const existingUser = await tx.user.findUnique({
           where: { id },
@@ -242,10 +255,10 @@ export class UserService {
         const anonymizedEmail = `anonymized_${id.substring(0, 8)}@deleted.local`;
         const anonymizedFirstName = `DELETED_USER_${id.substring(0, 8)}`;
         const anonymizedLastName = 'ANONYMIZED';
-        
+
         const user = await tx.user.update({
           where: { id },
-          data: { 
+          data: {
             isActive: false,
             email: anonymizedEmail,
             firstName: anonymizedFirstName,
@@ -303,7 +316,7 @@ export class UserService {
     try {
       const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async tx => {
         // Verify user exists within transaction
         const existingUser = await tx.user.findUnique({
           where: { id: userId },
@@ -356,7 +369,7 @@ export class UserService {
     shouldFail: boolean = true,
   ): Promise<{ success: boolean; message: string }> {
     try {
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async tx => {
         const testUser = await tx.user.create({
           data: {
             email: testUserEmail,
@@ -383,7 +396,9 @@ export class UserService {
         );
 
         if (shouldFail) {
-          throw new Error('Intentional rollback for testing transaction atomicity');
+          throw new Error(
+            'Intentional rollback for testing transaction atomicity',
+          );
         }
 
         return testUser;
@@ -394,7 +409,10 @@ export class UserService {
         message: 'Transaction completed successfully',
       };
     } catch (error) {
-      if (error instanceof Error && error.message.includes('Intentional rollback')) {
+      if (
+        error instanceof Error &&
+        error.message.includes('Intentional rollback')
+      ) {
         return {
           success: false,
           message: 'Transaction rolled back as expected',
@@ -404,7 +422,7 @@ export class UserService {
       this.logger.error('Unexpected error in transaction rollback test', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      
+
       throw error;
     }
   }

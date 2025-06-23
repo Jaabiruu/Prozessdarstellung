@@ -1,5 +1,11 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsString, IsOptional, IsEnum, IsBoolean, IsNotEmpty } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsBoolean,
+  IsNotEmpty,
+} from 'class-validator';
 import { UserRole } from '../../common/enums/user-role.enum';
 
 @InputType()
@@ -30,6 +36,8 @@ export class UpdateUserInput {
 
   @Field()
   @IsString()
-  @IsNotEmpty({ message: 'Reason is required for user updates (GxP compliance)' })
+  @IsNotEmpty({
+    message: 'Reason is required for user updates (GxP compliance)',
+  })
   reason!: string;
 }

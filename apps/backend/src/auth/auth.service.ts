@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../database/prisma.service';
 import { ConfigService } from '../config/config.service';
@@ -6,9 +6,13 @@ import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import Redis from 'ioredis';
 import { LoginInput } from './dto/login.input';
-import { AuthenticationResult, JwtPayload } from './interfaces/jwt-payload.interface';
+import {
+  AuthenticationResult,
+  JwtPayload,
+} from './interfaces/jwt-payload.interface';
 import { User } from '@prisma/client';
 import { AuditAction } from '../common/enums/user-role.enum';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AuthService {
@@ -20,18 +24,26 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly auditService: AuditService,
   ) {
     this.redis = new Redis(this.config.redis.url);
   }
 
-  async login(loginInput: LoginInput, ipAddress?: string, userAgent?: string): Promise<AuthenticationResult> {
+  async login(
+    loginInput: LoginInput,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthenticationResult> {
     const { email, password } = loginInput;
 
     try {
       const user = await this.validateUser(email, password);
-      
+
       if (!user.isActive) {
-        this.logger.warn('Login attempt for inactive user', { email, ipAddress });
+        this.logger.warn('Login attempt for inactive user', {
+          email,
+          ipAddress,
+        });
         throw new UnauthorizedException('Account is inactive');
       }
 
@@ -41,13 +53,11 @@ export class AuthService {
         email: user.email,
         role: user.role,
         jti,
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60),
       };
 
       const accessToken = this.jwtService.sign(payload);
 
-      await this.createAuditLog({
+      await this.auditService.create({
         userId: user.id,
         action: AuditAction.VIEW,
         entityType: 'Authentication',
@@ -57,7 +67,10 @@ export class AuthService {
         userAgent: userAgent || null,
       });
 
-      this.logger.log('User logged in successfully', { userId: user.id, email });
+      this.logger.log('User logged in successfully', {
+        userId: user.id,
+        email,
+      });
 
       return {
         user: {
@@ -79,22 +92,32 @@ export class AuthService {
     }
   }
 
-  async logout(jti: string, userId: string): Promise<boolean> {
+  async logout(
+    jti: string,
+    userId: string,
+    ipAddress?: string | null,
+    userAgent?: string | null,
+  ): Promise<boolean> {
     try {
       const key = `${this.JWT_BLOCKLIST_PREFIX}${jti}`;
       const expirationTime = 24 * 60 * 60;
-      
+
       await this.redis.setex(key, expirationTime, 'blocked');
 
-      await this.createAuditLog({
+      await this.auditService.create({
         userId,
         action: AuditAction.VIEW,
         entityType: 'Authentication',
         entityId: userId,
         reason: 'User logout',
+        ipAddress,
+        userAgent,
       });
 
-      this.logger.log('User logged out successfully', { userId, jti: jti.substring(0, 8) });
+      this.logger.log('User logged out successfully', {
+        userId,
+        jti: jti.substring(0, 8),
+      });
       return true;
     } catch (error) {
       this.logger.error('Logout failed', {
@@ -142,13 +165,13 @@ export class AuthService {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      
+
       // Log internal errors but return generic message
       this.logger.error('Error during user validation', {
         email,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      
+
       throw new UnauthorizedException('Invalid credentials');
     }
   }
@@ -157,7 +180,7 @@ export class AuthService {
     try {
       // Validate payload structure
       if (!payload || !payload.sub || !payload.jti || !payload.email) {
-        this.logger.warn('Invalid JWT payload structure', { 
+        this.logger.warn('Invalid JWT payload structure', {
           hasSubject: !!payload?.sub,
           hasJti: !!payload?.jti,
           hasEmail: !!payload?.email,
@@ -168,7 +191,7 @@ export class AuthService {
       // Check token blocklist
       const isBlocked = await this.isTokenBlocked(payload.jti);
       if (isBlocked) {
-        this.logger.warn('Blocked JWT token used', { 
+        this.logger.warn('Blocked JWT token used', {
           jti: payload.jti.substring(0, 8),
           userId: payload.sub,
         });
@@ -181,7 +204,7 @@ export class AuthService {
       });
 
       if (!user) {
-        this.logger.warn('JWT token for non-existent user', { 
+        this.logger.warn('JWT token for non-existent user', {
           userId: payload.sub,
           jti: payload.jti.substring(0, 8),
         });
@@ -189,7 +212,7 @@ export class AuthService {
       }
 
       if (!user.isActive) {
-        this.logger.warn('JWT token for inactive user', { 
+        this.logger.warn('JWT token for inactive user', {
           userId: payload.sub,
           email: user.email,
           jti: payload.jti.substring(0, 8),
@@ -199,7 +222,7 @@ export class AuthService {
 
       // Validate email matches (prevent token reuse)
       if (user.email !== payload.email) {
-        this.logger.warn('JWT token email mismatch', { 
+        this.logger.warn('JWT token email mismatch', {
           userId: payload.sub,
           tokenEmail: payload.email,
           userEmail: user.email,
@@ -223,40 +246,10 @@ export class AuthService {
     try {
       return this.jwtService.decode(token) as JwtPayload;
     } catch (error) {
-      this.logger.error('Token decode failed', { error: error instanceof Error ? error.message : 'Unknown error' });
-      return null;
-    }
-  }
-
-  private async createAuditLog(auditData: {
-    userId: string;
-    action: AuditAction;
-    entityType: string;
-    entityId: string;
-    reason: string;
-    ipAddress?: string | null;
-    userAgent?: string | null;
-  }): Promise<void> {
-    try {
-      await this.prisma.auditLog.create({
-        data: auditData,
-      });
-    } catch (error: any) {
-      // Handle Prisma P2002 unique constraint violation
-      if (error.code === 'P2002') {
-        this.logger.warn('Audit log constraint violation', {
-          userId: auditData.userId,
-          action: auditData.action,
-          constraint: error.meta?.target,
-        });
-        throw new ConflictException('Audit log already exists for this operation');
-      }
-      
-      this.logger.error('Failed to create audit log', {
-        userId: auditData.userId,
-        action: auditData.action,
+      this.logger.error('Token decode failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
+      return null;
     }
   }
 }

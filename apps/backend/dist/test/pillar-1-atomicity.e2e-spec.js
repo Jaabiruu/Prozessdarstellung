@@ -55,7 +55,9 @@ describe('Pillar 1: Atomicity & Data Integrity Tests', () => {
             await prisma.auditLog.deleteMany({ where: { userId: testUserId } });
             await prisma.process.deleteMany({});
             await prisma.productionLine.deleteMany({});
-            await prisma.user.deleteMany({ where: { email: 'pillar1-test@example.com' } });
+            await prisma.user.deleteMany({
+                where: { email: 'pillar1-test@example.com' },
+            });
         }
         catch (error) {
             console.warn('Cleanup error:', error);
@@ -71,7 +73,9 @@ describe('Pillar 1: Atomicity & Data Integrity Tests', () => {
     describe('ATOM-001: Transaction Rollback on Audit Failure', () => {
         it('should rollback entire transaction when audit logging fails', async () => {
             const originalCreate = auditService.create;
-            auditService.create = jest.fn().mockRejectedValue(new Error('Audit service failure'));
+            auditService.create = jest
+                .fn()
+                .mockRejectedValue(new Error('Audit service failure'));
             const initialCount = await prisma.productionLine.count();
             try {
                 await productionLineService.create({
@@ -88,8 +92,8 @@ describe('Pillar 1: Atomicity & Data Integrity Tests', () => {
             const auditLogs = await prisma.auditLog.findMany({
                 where: {
                     entityType: 'ProductionLine',
-                    details: { path: ['name'], equals: 'ROLLBACK_TEST_LINE' }
-                }
+                    details: { path: ['name'], equals: 'ROLLBACK_TEST_LINE' },
+                },
             });
             expect(auditLogs).toHaveLength(0);
             auditService.create = originalCreate;
@@ -120,7 +124,7 @@ describe('Pillar 1: Atomicity & Data Integrity Tests', () => {
                 expect(error.message).toBe('Database transaction failure');
             }
             const processes = await prisma.process.findMany({
-                where: { title: 'FAILURE_PROCESS' }
+                where: { title: 'FAILURE_PROCESS' },
             });
             expect(processes).toHaveLength(0);
             const finalAuditCount = await prisma.auditLog.count();
@@ -161,12 +165,12 @@ describe('Pillar 1: Atomicity & Data Integrity Tests', () => {
             ]);
             const responses = [result1, result2];
             const successCount = responses.filter(r => r.status === 'fulfilled' && r.value.status === 200).length;
-            const errorCount = responses.filter(r => r.status === 'fulfilled' && r.value.status !== 200 ||
+            const errorCount = responses.filter(r => (r.status === 'fulfilled' && r.value.status !== 200) ||
                 r.status === 'rejected').length;
             expect(successCount).toBe(1);
             expect(errorCount).toBe(1);
             const records = await prisma.productionLine.findMany({
-                where: { name: 'RACE_TEST' }
+                where: { name: 'RACE_TEST' },
             });
             expect(records).toHaveLength(1);
             await productionLineService.remove(records[0].id, 'Test cleanup', testUserId);
@@ -200,8 +204,8 @@ describe('Pillar 1: Atomicity & Data Integrity Tests', () => {
                         input: {
                             id: lineA.id,
                             name: 'NEW_NAME',
-                            reason: 'Updated reason'
-                        }
+                            reason: 'Updated reason',
+                        },
                     },
                 }),
                 (0, supertest_1.default)(app.getHttpServer())
@@ -213,8 +217,8 @@ describe('Pillar 1: Atomicity & Data Integrity Tests', () => {
                         input: {
                             id: lineB.id,
                             name: 'NEW_NAME',
-                            reason: 'Updated reason'
-                        }
+                            reason: 'Updated reason',
+                        },
                     },
                 }),
             ]);
@@ -222,7 +226,7 @@ describe('Pillar 1: Atomicity & Data Integrity Tests', () => {
             const successCount = responses.filter(r => r.status === 'fulfilled' && r.value.status === 200).length;
             expect(successCount).toBe(1);
             const records = await prisma.productionLine.findMany({
-                where: { name: 'NEW_NAME' }
+                where: { name: 'NEW_NAME' },
             });
             expect(records).toHaveLength(1);
             await productionLineService.remove(lineA.id, 'Test cleanup', testUserId);

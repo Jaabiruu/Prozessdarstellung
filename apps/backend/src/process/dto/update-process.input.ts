@@ -1,16 +1,16 @@
 import { InputType, Field, ID, Int, Float } from '@nestjs/graphql';
-import { 
-  IsString, 
-  IsEnum, 
-  IsOptional, 
-  IsNotEmpty, 
-  MinLength, 
-  MaxLength, 
-  IsUUID, 
-  IsNumber, 
-  Min, 
-  Max, 
-  IsHexColor 
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsNotEmpty,
+  MinLength,
+  MaxLength,
+  IsUUID,
+  IsNumber,
+  Min,
+  Max,
+  IsHexColor,
 } from 'class-validator';
 import { ProcessStatus } from '@prisma/client';
 
@@ -32,7 +32,9 @@ export class UpdateProcessInput {
   @Field({ nullable: true })
   @IsOptional()
   @IsString()
-  @MaxLength(1000, { message: 'Process description must not exceed 1000 characters' })
+  @MaxLength(1000, {
+    message: 'Process description must not exceed 1000 characters',
+  })
   description?: string;
 
   @Field(() => Int, { nullable: true })
@@ -49,9 +51,9 @@ export class UpdateProcessInput {
   @Max(100, { message: 'Progress cannot exceed 100%' })
   progress?: number;
 
-  @Field(() => ProcessStatus, { 
+  @Field(() => ProcessStatus, {
     nullable: true,
-    description: 'New status of the process' 
+    description: 'New status of the process',
   })
   @IsOptional()
   @IsEnum(ProcessStatus, { message: 'Invalid process status' })

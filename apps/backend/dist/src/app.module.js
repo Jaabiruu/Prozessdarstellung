@@ -33,10 +33,12 @@ exports.AppModule = AppModule = __decorate([
         imports: [
             config_1.ConfigModule,
             database_1.PrismaModule,
-            throttler_1.ThrottlerModule.forRoot([{
+            throttler_1.ThrottlerModule.forRoot([
+                {
                     ttl: 60000,
                     limit: 5,
-                }]),
+                },
+            ]),
             graphql_1.GraphQLModule.forRootAsync({
                 driver: apollo_1.ApolloDriver,
                 inject: [config_1.ConfigService, prisma_service_1.PrismaService],

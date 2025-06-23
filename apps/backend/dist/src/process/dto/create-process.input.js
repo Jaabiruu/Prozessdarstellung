@@ -38,7 +38,9 @@ __decorate([
     (0, graphql_1.Field)({ nullable: true }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MaxLength)(1000, { message: 'Process description must not exceed 1000 characters' }),
+    (0, class_validator_1.MaxLength)(1000, {
+        message: 'Process description must not exceed 1000 characters',
+    }),
     __metadata("design:type", String)
 ], CreateProcessInput.prototype, "description", void 0);
 __decorate([
@@ -61,7 +63,7 @@ __decorate([
     (0, graphql_1.Field)(() => client_1.ProcessStatus, {
         nullable: true,
         defaultValue: client_1.ProcessStatus.PENDING,
-        description: 'Initial status of the process'
+        description: 'Initial status of the process',
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.ProcessStatus, { message: 'Invalid process status' }),

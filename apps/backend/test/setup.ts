@@ -14,10 +14,10 @@ export class TestSetup {
     try {
       // Reset the test database
       await this.resetDatabase();
-      
+
       // Clear Redis test database
       await redis.flushdb();
-      
+
       console.log('✅ Test environment setup completed');
     } catch (error) {
       console.error('❌ Test setup failed:', error);
@@ -29,11 +29,11 @@ export class TestSetup {
     try {
       // Clean up test data
       await this.cleanupDatabase();
-      
+
       // Close connections
       await prisma.$disconnect();
       await redis.quit();
-      
+
       console.log('✅ Test environment cleanup completed');
     } catch (error) {
       console.error('❌ Test cleanup failed:', error);
@@ -53,10 +53,10 @@ export class TestSetup {
   private static async resetDatabase(): Promise<void> {
     // Apply migrations to test database
     execSync('npx prisma migrate deploy', { stdio: 'inherit' });
-    
+
     // Generate Prisma client
     execSync('npx prisma generate', { stdio: 'inherit' });
-    
+
     // Seed test database with minimal data
     await this.seedTestDatabase();
   }
@@ -79,17 +79,22 @@ export class TestSetup {
 
   private static async cleanupTestData(): Promise<void> {
     // Remove only test data (keep seed data)
-    // Use IP address and user agent to identify test audit logs
+    // Delete in proper order to respect foreign key constraints
+    
+    // First, delete audit logs that reference test users
     await prisma.auditLog.deleteMany({
       where: {
         OR: [
           { ipAddress: '127.0.0.1' },
+          { ipAddress: '::ffff:127.0.0.1' },
           { userAgent: 'test-agent' },
+          { userAgent: 'Test-Agent/1.0' },
           { reason: { contains: 'test' } },
         ],
       },
     });
 
+    // Then delete test users
     await prisma.user.deleteMany({
       where: {
         email: {
@@ -101,7 +106,7 @@ export class TestSetup {
 
   private static async seedTestDatabase(): Promise<void> {
     const bcrypt = await import('bcrypt');
-    
+
     // Create test admin user
     await prisma.user.upsert({
       where: { email: 'admin@test.local' },

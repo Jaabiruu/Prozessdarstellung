@@ -7,7 +7,10 @@ import { AuthResponse } from './dto/auth-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { AuditContext } from '../common/decorators/audit-context.decorator';
+import type { AuditContext as AuditContextType } from '../common/decorators/audit-context.decorator';
 import { User } from '@prisma/client';
+import { GraphQLContext } from '../common/interfaces/graphql-context.interface';
 
 @Resolver()
 export class AuthResolver {
@@ -18,20 +21,21 @@ export class AuthResolver {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async login(
     @Args('input') loginInput: LoginInput,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<AuthResponse> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     try {
-      const result = await this.authService.login(loginInput, ipAddress, userAgent);
+      const result = await this.authService.login(
+        loginInput,
+        auditContext.ipAddress,
+        auditContext.userAgent,
+      );
       return result;
     } catch (error) {
       // Always return generic error message for security
       if (error instanceof UnauthorizedException) {
         throw error; // AuthService already provides generic message
       }
-      
+
       // Log unexpected errors but don't expose details
       console.error('Unexpected login error:', error);
       throw new UnauthorizedException('Invalid credentials');
@@ -42,7 +46,8 @@ export class AuthResolver {
   @UseGuards(JwtAuthGuard)
   async logout(
     @CurrentUser() user: User,
-    @Context() context: any,
+    @Context() context: GraphQLContext,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<boolean> {
     const authHeader = context.req?.headers?.authorization;
     if (!authHeader) {
@@ -50,25 +55,30 @@ export class AuthResolver {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    
+
     try {
       const payload = this.authService.decodeToken(token);
       if (!payload || !payload.jti) {
         throw new UnauthorizedException('Invalid token');
       }
 
-      const result = await this.authService.logout(payload.jti, user.id);
+      const result = await this.authService.logout(
+        payload.jti,
+        user.id,
+        auditContext.ipAddress,
+        auditContext.userAgent,
+      );
       if (!result) {
         throw new UnauthorizedException('Logout failed');
       }
-      
+
       return result;
     } catch (error) {
       // Log error details but return generic message
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      
+
       console.error('Unexpected logout error:', error);
       throw new UnauthorizedException('Logout failed');
     }

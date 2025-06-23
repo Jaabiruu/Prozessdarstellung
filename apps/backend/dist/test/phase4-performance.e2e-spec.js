@@ -11,7 +11,7 @@ describe('Phase 4 Performance & DataLoader Tests (E2E)', () => {
     let app;
     let prisma;
     let operatorToken;
-    let testProductionLines = [];
+    const testProductionLines = [];
     let queryLog = [];
     beforeAll(async () => {
         const moduleFixture = await testing_1.Test.createTestingModule({
@@ -401,7 +401,9 @@ describe('Phase 4 Performance & DataLoader Tests (E2E)', () => {
         }
       `;
             const startTime = Date.now();
-            const concurrentRequests = Array(5).fill(null).map(() => (0, supertest_1.default)(app.getHttpServer())
+            const concurrentRequests = Array(5)
+                .fill(null)
+                .map(() => (0, supertest_1.default)(app.getHttpServer())
                 .post('/graphql')
                 .set('Authorization', `Bearer ${operatorToken}`)
                 .send({ query }));

@@ -24,7 +24,9 @@ let PrismaService = PrismaService_1 = class PrismaService extends client_1.Prism
                     url: configService.database.url,
                 },
             },
-            log: configService.isDevelopment ? ['query', 'info', 'warn', 'error'] : ['error'],
+            log: configService.isDevelopment
+                ? ['query', 'info', 'warn', 'error']
+                : ['error'],
             errorFormat: 'minimal',
         });
         this.configService = configService;

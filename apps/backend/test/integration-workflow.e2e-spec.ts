@@ -3,10 +3,11 @@ import { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { TestSetup } from './setup';
 import request from 'supertest';
+import { PrismaClient } from '@prisma/client';
 
 describe('Integration & End-to-End Workflow Tests (E2E)', () => {
   let app: INestApplication;
-  let prisma: any;
+  let prisma: PrismaClient;
   let managerToken: string;
   let operatorToken: string;
 
@@ -85,7 +86,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
     it('should execute complete pharmaceutical production workflow successfully', async () => {
       // Step 1: Create ProductionLine
       console.log('🏭 Step 1: Creating ProductionLine...');
-      
+
       const createProductionLineMutation = `
         mutation CreateProductionLine($input: CreateProductionLineInput!) {
           createProductionLine(input: $input) {
@@ -114,7 +115,8 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         .expect(200);
 
       expect(productionLineResponse.body.errors).toBeUndefined();
-      const productionLine = productionLineResponse.body.data.createProductionLine;
+      const productionLine =
+        productionLineResponse.body.data.createProductionLine;
       expect(productionLine.name).toBe('workflow-test-pharmaceutical-line');
       expect(productionLine.isActive).toBe(true);
 
@@ -123,7 +125,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
 
       // Step 2: Add multiple processes to the production line
       console.log('⚗️ Step 2: Adding processes to ProductionLine...');
-      
+
       const createProcessMutation = `
         mutation CreateProcess($input: CreateProcessInput!) {
           createProcess(input: $input) {
@@ -192,8 +194,10 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
       console.log(`✅ Created ${createdProcesses.length} processes`);
 
       // Step 3: Query ProductionLine with nested processes
-      console.log('🔍 Step 3: Querying ProductionLine with nested processes...');
-      
+      console.log(
+        '🔍 Step 3: Querying ProductionLine with nested processes...',
+      );
+
       const queryProductionLineWithProcesses = `
         query ProductionLineWithProcesses($id: String!) {
           productionLine(id: $id) {
@@ -230,11 +234,15 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
       expect(queriedProductionLine.processes).toHaveLength(3);
       expect(queriedProductionLine.processCount).toBe(3);
 
-      console.log('✅ Successfully queried ProductionLine with nested processes');
+      console.log(
+        '✅ Successfully queried ProductionLine with nested processes',
+      );
 
       // Step 4: Update processes (simulate production progress)
-      console.log('🔄 Step 4: Updating processes to simulate production progress...');
-      
+      console.log(
+        '🔄 Step 4: Updating processes to simulate production progress...',
+      );
+
       const updateProcessMutation = `
         mutation UpdateProcess($input: UpdateProcessInput!) {
           updateProcess(input: $input) {
@@ -263,7 +271,9 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         })
         .expect(200);
 
-      expect(updateResponse1.body.data.updateProcess.status).toBe('IN_PROGRESS');
+      expect(updateResponse1.body.data.updateProcess.status).toBe(
+        'IN_PROGRESS',
+      );
       expect(updateResponse1.body.data.updateProcess.progress).toBe(0.5);
 
       // Complete first process and start second
@@ -299,11 +309,13 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         })
         .expect(200);
 
-      console.log('✅ Successfully updated processes to simulate production flow');
+      console.log(
+        '✅ Successfully updated processes to simulate production flow',
+      );
 
       // Step 5: Update ProductionLine information
       console.log('🏭 Step 5: Updating ProductionLine...');
-      
+
       const updateProductionLineMutation = `
         mutation UpdateProductionLine($input: UpdateProductionLineInput!) {
           updateProductionLine(input: $input) {
@@ -330,13 +342,15 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         })
         .expect(200);
 
-      expect(updatePLResponse.body.data.updateProductionLine.name).toBe('workflow-test-pharmaceutical-line-updated');
+      expect(updatePLResponse.body.data.updateProductionLine.name).toBe(
+        'workflow-test-pharmaceutical-line-updated',
+      );
 
       console.log('✅ Successfully updated ProductionLine');
 
       // Step 6: Query all processes by production line
       console.log('📋 Step 6: Querying all processes by ProductionLine...');
-      
+
       const queryProcessesByProductionLine = `
         query ProcessesByProductionLine($productionLineId: String!) {
           processesByProductionLine(productionLineId: $productionLineId) {
@@ -357,10 +371,15 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         })
         .expect(200);
 
-      expect(processesResponse.body.data.processesByProductionLine).toHaveLength(3);
-      
+      expect(
+        processesResponse.body.data.processesByProductionLine,
+      ).toHaveLength(3);
+
       // Verify process statuses
-      const processStatuses = processesResponse.body.data.processesByProductionLine.map(p => p.status);
+      const processStatuses =
+        processesResponse.body.data.processesByProductionLine.map(
+          p => p.status,
+        );
       expect(processStatuses).toContain('COMPLETED');
       expect(processStatuses).toContain('IN_PROGRESS');
       expect(processStatuses).toContain('PENDING');
@@ -368,8 +387,10 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
       console.log('✅ Successfully queried processes by ProductionLine');
 
       // Step 7: Attempt to deactivate ProductionLine with active processes (should fail)
-      console.log('🚫 Step 7: Testing deactivation protection with active processes...');
-      
+      console.log(
+        '🚫 Step 7: Testing deactivation protection with active processes...',
+      );
+
       const removeProductionLineMutation = `
         mutation RemoveProductionLine($id: String!, $reason: String!) {
           removeProductionLine(id: $id, reason: $reason) {
@@ -392,13 +413,17 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         .expect(200);
 
       expect(failedDeactivationResponse.body.errors).toBeDefined();
-      expect(failedDeactivationResponse.body.errors[0].message).toContain('active processes');
+      expect(failedDeactivationResponse.body.errors[0].message).toContain(
+        'active processes',
+      );
 
-      console.log('✅ ProductionLine correctly protected from deactivation with active processes');
+      console.log(
+        '✅ ProductionLine correctly protected from deactivation with active processes',
+      );
 
       // Step 8: Complete all processes
       console.log('✅ Step 8: Completing all remaining processes...');
-      
+
       for (const process of createdProcesses.slice(1)) {
         await request(app.getHttpServer())
           .post('/graphql')
@@ -421,7 +446,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
 
       // Step 9: Successfully deactivate ProductionLine
       console.log('🏭 Step 9: Deactivating ProductionLine...');
-      
+
       const successfulDeactivationResponse = await request(app.getHttpServer())
         .post('/graphql')
         .set('Authorization', `Bearer ${managerToken}`)
@@ -435,13 +460,15 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         .expect(200);
 
       expect(successfulDeactivationResponse.body.errors).toBeUndefined();
-      expect(successfulDeactivationResponse.body.data.removeProductionLine.isActive).toBe(false);
+      expect(
+        successfulDeactivationResponse.body.data.removeProductionLine.isActive,
+      ).toBe(false);
 
       console.log('✅ ProductionLine successfully deactivated');
 
       // Step 10: Verify final state
       console.log('🔍 Step 10: Verifying final workflow state...');
-      
+
       const finalStateResponse = await request(app.getHttpServer())
         .post('/graphql')
         .set('Authorization', `Bearer ${operatorToken}`)
@@ -454,7 +481,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
       const finalProductionLine = finalStateResponse.body.data.productionLine;
       expect(finalProductionLine.isActive).toBe(false);
       expect(finalProductionLine.processes).toHaveLength(3);
-      
+
       // All processes should be completed
       finalProductionLine.processes.forEach(process => {
         expect(process.status).toBe('COMPLETED');
@@ -465,7 +492,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
 
       // Step 11: Verify audit trail completeness
       console.log('📝 Step 11: Verifying complete audit trail...');
-      
+
       const auditLogs = await prisma.auditLog.findMany({
         where: {
           OR: [
@@ -473,7 +500,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
             { entityId: { in: createdProcesses.map(p => p.id) } },
           ],
         },
-        orderBy: { timestamp: 'asc' },
+        orderBy: { createdAt: 'asc' },
       });
 
       // Should have audit logs for:
@@ -485,9 +512,13 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
       expect(actionTypes).toContain('UPDATE');
       expect(actionTypes).toContain('DELETE'); // Deactivation
 
-      console.log(`✅ Complete audit trail verified with ${auditLogs.length} audit entries`);
+      console.log(
+        `✅ Complete audit trail verified with ${auditLogs.length} audit entries`,
+      );
 
-      console.log('🎉 COMPLETE WORKFLOW TEST PASSED: End-to-end pharmaceutical production workflow executed successfully');
+      console.log(
+        '🎉 COMPLETE WORKFLOW TEST PASSED: End-to-end pharmaceutical production workflow executed successfully',
+      );
     });
   });
 
@@ -552,7 +583,9 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
       expect(unchangedProcess).toBeDefined();
       expect(unchangedProcess.isActive).toBe(true);
 
-      console.log('✅ Cascade deletion properly prevented, referential integrity maintained');
+      console.log(
+        '✅ Cascade deletion properly prevented, referential integrity maintained',
+      );
     });
 
     it('should handle orphaned process prevention', async () => {
@@ -636,7 +669,9 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
           })
           .expect(200);
 
-        expect(response.body.data.productionLines).toHaveLength(testCase.expectedCount);
+        expect(response.body.data.productionLines).toHaveLength(
+          testCase.expectedCount,
+        );
       }
 
       console.log('✅ Pagination boundaries handled correctly');
@@ -655,7 +690,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
 
       // Execute multiple concurrent operations
       const operations = [];
-      
+
       // Create multiple processes concurrently
       for (let i = 1; i <= 5; i++) {
         operations.push(
@@ -679,7 +714,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
                   reason: `Concurrent creation ${i}`,
                 },
               },
-            })
+            }),
         );
       }
 
@@ -703,7 +738,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
                 }
               `,
               variables: { id: productionLine.id },
-            })
+            }),
         );
       }
 
@@ -726,6 +761,198 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
       });
 
       console.log('✅ Data consistency maintained under concurrent load');
+    });
+  });
+
+  describe('Regression Tests', () => {
+    it('should complete full ADMIN user workflow (REG-003)', async () => {
+      // Get ADMIN token
+      const adminLoginResponse = await request(app.getHttpServer())
+        .post('/graphql')
+        .send({
+          query: `
+            mutation Login($input: LoginInput!) {
+              login(input: $input) {
+                accessToken
+                user {
+                  id
+                  role
+                }
+              }
+            }
+          `,
+          variables: {
+            input: {
+              email: 'admin@test.local',
+              password: 'admin123',
+            },
+          },
+        })
+        .expect(200);
+
+      expect(adminLoginResponse.body.data.login.user.role).toBe('ADMIN');
+      const adminToken = adminLoginResponse.body.data.login.accessToken;
+
+      console.log('🔐 Step 1: ADMIN login successful');
+
+      // Create ProductionLine
+      const createResponse = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: `
+            mutation CreateProductionLine($input: CreateProductionLineInput!) {
+              createProductionLine(input: $input) {
+                id
+                name
+                status
+                isActive
+              }
+            }
+          `,
+          variables: {
+            input: {
+              name: 'REG-003-ADMIN-TEST-LINE',
+              status: 'ACTIVE',
+              reason: 'REG-003 regression test - ADMIN workflow',
+            },
+          },
+        })
+        .expect(200);
+
+      expect(createResponse.body.errors).toBeUndefined();
+      expect(createResponse.body.data.createProductionLine.name).toBe('REG-003-ADMIN-TEST-LINE');
+      expect(createResponse.body.data.createProductionLine.isActive).toBe(true);
+
+      const productionLineId = createResponse.body.data.createProductionLine.id;
+      console.log('🏭 Step 2: ProductionLine created successfully');
+
+      // Update ProductionLine name
+      const updateResponse = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: `
+            mutation UpdateProductionLine($input: UpdateProductionLineInput!) {
+              updateProductionLine(input: $input) {
+                id
+                name
+                status
+              }
+            }
+          `,
+          variables: {
+            input: {
+              id: productionLineId,
+              name: 'REG-003-ADMIN-TEST-LINE-UPDATED',
+              reason: 'REG-003 regression test - name update',
+            },
+          },
+        })
+        .expect(200);
+
+      expect(updateResponse.body.errors).toBeUndefined();
+      expect(updateResponse.body.data.updateProductionLine.name).toBe('REG-003-ADMIN-TEST-LINE-UPDATED');
+
+      console.log('📝 Step 3: ProductionLine name updated successfully');
+
+      // Query and verify
+      const queryResponse = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: `
+            query ProductionLine($id: String!) {
+              productionLine(id: $id) {
+                id
+                name
+                status
+                isActive
+                createdAt
+                updatedAt
+              }
+            }
+          `,
+          variables: { id: productionLineId },
+        })
+        .expect(200);
+
+      expect(queryResponse.body.errors).toBeUndefined();
+      const queriedLine = queryResponse.body.data.productionLine;
+      expect(queriedLine.id).toBe(productionLineId);
+      expect(queriedLine.name).toBe('REG-003-ADMIN-TEST-LINE-UPDATED');
+      expect(queriedLine.status).toBe('ACTIVE');
+      expect(queriedLine.isActive).toBe(true);
+      expect(new Date(queriedLine.updatedAt).getTime()).toBeGreaterThan(new Date(queriedLine.createdAt).getTime());
+
+      console.log('🔍 Step 4: Query verification successful');
+
+      // Deactivate ProductionLine
+      const deactivateResponse = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: `
+            mutation RemoveProductionLine($id: String!, $reason: String!) {
+              removeProductionLine(id: $id, reason: $reason) {
+                id
+                name
+                isActive
+              }
+            }
+          `,
+          variables: {
+            id: productionLineId,
+            reason: 'REG-003 regression test - deactivation',
+          },
+        })
+        .expect(200);
+
+      expect(deactivateResponse.body.errors).toBeUndefined();
+      expect(deactivateResponse.body.data.removeProductionLine.isActive).toBe(false);
+
+      console.log('🚫 Step 5: ProductionLine deactivated successfully');
+
+      // Verify inactive state
+      const finalQueryResponse = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: `
+            query ProductionLine($id: String!) {
+              productionLine(id: $id) {
+                id
+                name
+                isActive
+              }
+            }
+          `,
+          variables: { id: productionLineId },
+        })
+        .expect(200);
+
+      expect(finalQueryResponse.body.errors).toBeUndefined();
+      expect(finalQueryResponse.body.data.productionLine.isActive).toBe(false);
+
+      console.log('✅ Step 6: Inactive state verified successfully');
+
+      // Verify complete audit trail
+      const auditLogs = await prisma.auditLog.findMany({
+        where: {
+          entityType: 'ProductionLine',
+          entityId: productionLineId,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      expect(auditLogs).toHaveLength(3); // CREATE, UPDATE, DELETE
+      expect(auditLogs[0].action).toBe('CREATE');
+      expect(auditLogs[1].action).toBe('UPDATE');
+      expect(auditLogs[2].action).toBe('DELETE');
+
+      console.log('📋 Step 7: Complete audit trail verified');
+
+      console.log('🎉 REG-003: Full ADMIN user workflow completed successfully');
     });
   });
 });

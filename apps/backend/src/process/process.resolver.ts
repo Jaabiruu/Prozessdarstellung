@@ -1,4 +1,13 @@
-import { Resolver, Query, Mutation, Args, Context, ResolveField, Parent, Int } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  Context,
+  ResolveField,
+  Parent,
+  Int,
+} from '@nestjs/graphql';
 import { GraphQLContext } from '../common/interfaces/graphql-context.interface';
 import { UseGuards } from '@nestjs/common';
 import { ProcessService } from './process.service';
@@ -9,6 +18,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { AuditContext } from '../common/decorators/audit-context.decorator';
+import type { AuditContext as AuditContextType } from '../common/decorators/audit-context.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { User as PrismaUser, ProcessStatus } from '@prisma/client';
 import { User } from '../user/entities/user.entity';
@@ -24,26 +35,32 @@ export class ProcessResolver {
   async createProcess(
     @Args('input') createProcessInput: CreateProcessInput,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<Process> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.processService.create(
       createProcessInput,
       currentUser.id,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
 
   @Query(() => [Process])
-  @Roles(UserRole.OPERATOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.QUALITY_ASSURANCE)
+  @Roles(
+    UserRole.OPERATOR,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+    UserRole.QUALITY_ASSURANCE,
+  )
   async processes(
-    @Args('limit', { type: () => Int, nullable: true, defaultValue: 100 }) limit: number,
-    @Args('offset', { type: () => Int, nullable: true, defaultValue: 0 }) offset: number,
-    @Args('isActive', { type: () => Boolean, nullable: true }) isActive?: boolean,
-    @Args('status', { type: () => ProcessStatus, nullable: true }) status?: ProcessStatus,
+    @Args('limit', { type: () => Int, nullable: true, defaultValue: 100 })
+    limit: number,
+    @Args('offset', { type: () => Int, nullable: true, defaultValue: 0 })
+    offset: number,
+    @Args('isActive', { type: () => Boolean, nullable: true })
+    isActive?: boolean,
+    @Args('status', { type: () => ProcessStatus, nullable: true })
+    status?: ProcessStatus,
     @Args('productionLineId', { nullable: true }) productionLineId?: string,
   ): Promise<Process[]> {
     return this.processService.findAll({
@@ -56,26 +73,14 @@ export class ProcessResolver {
   }
 
   @Query(() => Process)
-  @Roles(UserRole.OPERATOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.QUALITY_ASSURANCE)
+  @Roles(
+    UserRole.OPERATOR,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+    UserRole.QUALITY_ASSURANCE,
+  )
   async process(@Args('id') id: string): Promise<Process> {
     return this.processService.findOne(id);
-  }
-
-  @Query(() => [Process])
-  @Roles(UserRole.OPERATOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.QUALITY_ASSURANCE)
-  async processesByProductionLine(
-    @Args('productionLineId') productionLineId: string,
-    @Args('limit', { type: () => Int, nullable: true, defaultValue: 100 }) limit: number,
-    @Args('offset', { type: () => Int, nullable: true, defaultValue: 0 }) offset: number,
-    @Args('isActive', { type: () => Boolean, nullable: true }) isActive?: boolean,
-    @Args('status', { type: () => ProcessStatus, nullable: true }) status?: ProcessStatus,
-  ): Promise<Process[]> {
-    return this.processService.findAllByProductionLine(productionLineId, {
-      limit,
-      offset,
-      ...(isActive !== undefined && { isActive }),
-      ...(status && { status }),
-    });
   }
 
   @Mutation(() => Process)
@@ -83,16 +88,13 @@ export class ProcessResolver {
   async updateProcess(
     @Args('input') updateProcessInput: UpdateProcessInput,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<Process> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.processService.update(
       updateProcessInput,
       currentUser.id,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
 
@@ -102,17 +104,14 @@ export class ProcessResolver {
     @Args('id') id: string,
     @Args('reason') reason: string,
     @CurrentUser() currentUser: PrismaUser,
-    @Context() context: any,
+    @AuditContext() auditContext: AuditContextType,
   ): Promise<Process> {
-    const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-    const userAgent = context.req?.get('user-agent');
-
     return this.processService.remove(
       id,
       reason,
       currentUser.id,
-      ipAddress,
-      userAgent,
+      auditContext.ipAddress,
+      auditContext.userAgent,
     );
   }
 
@@ -132,6 +131,8 @@ export class ProcessResolver {
     @Context() context: GraphQLContext,
   ): Promise<ProductionLine | null> {
     // Use DataLoader to prevent N+1 queries
-    return context.dataloaders.productionLineLoader.load(process.productionLineId);
+    return context.dataloaders.productionLineLoader.load(
+      process.productionLineId,
+    );
   }
 }

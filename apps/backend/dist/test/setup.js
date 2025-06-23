@@ -96,7 +96,9 @@ class TestSetup {
             where: {
                 OR: [
                     { ipAddress: '127.0.0.1' },
+                    { ipAddress: '::ffff:127.0.0.1' },
                     { userAgent: 'test-agent' },
+                    { userAgent: 'Test-Agent/1.0' },
                     { reason: { contains: 'test' } },
                 ],
             },

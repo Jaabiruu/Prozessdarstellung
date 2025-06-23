@@ -74,7 +74,9 @@ let ProductionLineService = ProductionLineService_1 = class ProductionLineServic
         try {
             const productionLines = await this.prisma.productionLine.findMany({
                 where: {
-                    ...(options?.isActive !== undefined && { isActive: options.isActive }),
+                    ...(options?.isActive !== undefined && {
+                        isActive: options.isActive,
+                    }),
                     ...(options?.status && { status: options.status }),
                 },
                 include: {
@@ -266,41 +268,6 @@ let ProductionLineService = ProductionLineService_1 = class ProductionLineServic
         catch (error) {
             this.logger.error('Failed to deactivate production line', {
                 productionLineId: id,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
-            throw error;
-        }
-    }
-    async findProcessesByProductionLine(productionLineId, options) {
-        try {
-            await this.findOne(productionLineId);
-            const processes = await this.prisma.process.findMany({
-                where: {
-                    productionLineId,
-                    ...(options?.isActive !== undefined && { isActive: options.isActive }),
-                },
-                include: {
-                    creator: {
-                        select: {
-                            id: true,
-                            email: true,
-                            firstName: true,
-                            lastName: true,
-                            role: true,
-                        },
-                    },
-                },
-                orderBy: {
-                    createdAt: 'desc',
-                },
-                take: options?.limit || 100,
-                skip: options?.offset || 0,
-            });
-            return processes;
-        }
-        catch (error) {
-            this.logger.error('Failed to fetch processes for production line', {
-                productionLineId,
                 error: error instanceof Error ? error.message : 'Unknown error',
             });
             throw error;

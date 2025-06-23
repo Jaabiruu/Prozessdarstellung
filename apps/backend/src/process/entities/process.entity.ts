@@ -1,8 +1,15 @@
-import { ObjectType, Field, ID, Int, Float, registerEnumType } from '@nestjs/graphql';
+import {
+  ObjectType,
+  Field,
+  ID,
+  Int,
+  Float,
+  registerEnumType,
+} from '@nestjs/graphql';
 import { ProcessStatus } from '@prisma/client';
 import { User } from '../../user/entities/user.entity';
 
-// Import ProductionLine entity  
+// Import ProductionLine entity
 import { ProductionLine } from '../../production-line/entities/production-line.entity';
 
 // Register the enum for GraphQL

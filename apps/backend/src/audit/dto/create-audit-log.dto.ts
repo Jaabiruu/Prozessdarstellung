@@ -1,6 +1,12 @@
 import { IsString, IsEnum, IsOptional, IsJSON } from 'class-validator';
 import { AuditAction } from '../../common/enums/user-role.enum';
 
+interface AuditDetails {
+  changes?: Record<string, unknown>;
+  previousValues?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export class CreateAuditLogDto {
   @IsString()
   userId!: string;
@@ -27,5 +33,5 @@ export class CreateAuditLogDto {
 
   @IsOptional()
   @IsJSON()
-  details?: Record<string, any> | null;
+  details?: AuditDetails | null;
 }

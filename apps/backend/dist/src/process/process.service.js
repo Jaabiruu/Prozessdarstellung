@@ -95,9 +95,13 @@ let ProcessService = ProcessService_1 = class ProcessService {
         try {
             const processes = await this.prisma.process.findMany({
                 where: {
-                    ...(options?.isActive !== undefined && { isActive: options.isActive }),
+                    ...(options?.isActive !== undefined && {
+                        isActive: options.isActive,
+                    }),
                     ...(options?.status && { status: options.status }),
-                    ...(options?.productionLineId && { productionLineId: options.productionLineId }),
+                    ...(options?.productionLineId && {
+                        productionLineId: options.productionLineId,
+                    }),
                 },
                 include: {
                     creator: {
@@ -168,27 +172,6 @@ let ProcessService = ProcessService_1 = class ProcessService {
             }
             this.logger.error('Failed to fetch process', {
                 processId: id,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
-            throw error;
-        }
-    }
-    async findAllByProductionLine(productionLineId, options) {
-        try {
-            const productionLine = await this.prisma.productionLine.findUnique({
-                where: { id: productionLineId },
-            });
-            if (!productionLine) {
-                throw new common_1.NotFoundException(`Production line with ID ${productionLineId} not found`);
-            }
-            return this.findAll({
-                ...options,
-                productionLineId,
-            });
-        }
-        catch (error) {
-            this.logger.error('Failed to fetch processes by production line', {
-                productionLineId,
                 error: error instanceof Error ? error.message : 'Unknown error',
             });
             throw error;

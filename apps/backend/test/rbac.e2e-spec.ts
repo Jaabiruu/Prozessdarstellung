@@ -3,10 +3,11 @@ import { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { TestSetup } from './setup';
 import request from 'supertest';
+import { PrismaClient } from '@prisma/client';
 
 describe('Authorization System (RBAC) (E2E)', () => {
   let app: INestApplication;
-  let prisma: any;
+  let prisma: PrismaClient;
   let adminToken: string;
   let managerToken: string;
   let operatorToken: string;
@@ -31,7 +32,10 @@ describe('Authorization System (RBAC) (E2E)', () => {
     await app.close();
   });
 
-  async function getAuthToken(email: string, password: string): Promise<string> {
+  async function getAuthToken(
+    email: string,
+    password: string,
+  ): Promise<string> {
     const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {

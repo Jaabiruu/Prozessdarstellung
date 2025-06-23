@@ -394,7 +394,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
                         { entityId: { in: createdProcesses.map(p => p.id) } },
                     ],
                 },
-                orderBy: { timestamp: 'asc' },
+                orderBy: { createdAt: 'asc' },
             });
             expect(auditLogs.length).toBeGreaterThanOrEqual(8);
             const actionTypes = auditLogs.map(log => log.action);
@@ -596,6 +596,169 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
                 expect(process.title).toBe(`workflow-test-concurrent-${index + 1}`);
             });
             console.log('✅ Data consistency maintained under concurrent load');
+        });
+    });
+    describe('Regression Tests', () => {
+        it('should complete full ADMIN user workflow (REG-003)', async () => {
+            const adminLoginResponse = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .send({
+                query: `
+            mutation Login($input: LoginInput!) {
+              login(input: $input) {
+                accessToken
+                user {
+                  id
+                  role
+                }
+              }
+            }
+          `,
+                variables: {
+                    input: {
+                        email: 'admin@test.local',
+                        password: 'admin123',
+                    },
+                },
+            })
+                .expect(200);
+            expect(adminLoginResponse.body.data.login.user.role).toBe('ADMIN');
+            const adminToken = adminLoginResponse.body.data.login.accessToken;
+            console.log('🔐 Step 1: ADMIN login successful');
+            const createResponse = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({
+                query: `
+            mutation CreateProductionLine($input: CreateProductionLineInput!) {
+              createProductionLine(input: $input) {
+                id
+                name
+                status
+                isActive
+              }
+            }
+          `,
+                variables: {
+                    input: {
+                        name: 'REG-003-ADMIN-TEST-LINE',
+                        status: 'ACTIVE',
+                        reason: 'REG-003 regression test - ADMIN workflow',
+                    },
+                },
+            })
+                .expect(200);
+            expect(createResponse.body.errors).toBeUndefined();
+            expect(createResponse.body.data.createProductionLine.name).toBe('REG-003-ADMIN-TEST-LINE');
+            expect(createResponse.body.data.createProductionLine.isActive).toBe(true);
+            const productionLineId = createResponse.body.data.createProductionLine.id;
+            console.log('🏭 Step 2: ProductionLine created successfully');
+            const updateResponse = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({
+                query: `
+            mutation UpdateProductionLine($input: UpdateProductionLineInput!) {
+              updateProductionLine(input: $input) {
+                id
+                name
+                status
+              }
+            }
+          `,
+                variables: {
+                    input: {
+                        id: productionLineId,
+                        name: 'REG-003-ADMIN-TEST-LINE-UPDATED',
+                        reason: 'REG-003 regression test - name update',
+                    },
+                },
+            })
+                .expect(200);
+            expect(updateResponse.body.errors).toBeUndefined();
+            expect(updateResponse.body.data.updateProductionLine.name).toBe('REG-003-ADMIN-TEST-LINE-UPDATED');
+            console.log('📝 Step 3: ProductionLine name updated successfully');
+            const queryResponse = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({
+                query: `
+            query ProductionLine($id: String!) {
+              productionLine(id: $id) {
+                id
+                name
+                status
+                isActive
+                createdAt
+                updatedAt
+              }
+            }
+          `,
+                variables: { id: productionLineId },
+            })
+                .expect(200);
+            expect(queryResponse.body.errors).toBeUndefined();
+            const queriedLine = queryResponse.body.data.productionLine;
+            expect(queriedLine.id).toBe(productionLineId);
+            expect(queriedLine.name).toBe('REG-003-ADMIN-TEST-LINE-UPDATED');
+            expect(queriedLine.status).toBe('ACTIVE');
+            expect(queriedLine.isActive).toBe(true);
+            expect(new Date(queriedLine.updatedAt).getTime()).toBeGreaterThan(new Date(queriedLine.createdAt).getTime());
+            console.log('🔍 Step 4: Query verification successful');
+            const deactivateResponse = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({
+                query: `
+            mutation RemoveProductionLine($id: String!, $reason: String!) {
+              removeProductionLine(id: $id, reason: $reason) {
+                id
+                name
+                isActive
+              }
+            }
+          `,
+                variables: {
+                    id: productionLineId,
+                    reason: 'REG-003 regression test - deactivation',
+                },
+            })
+                .expect(200);
+            expect(deactivateResponse.body.errors).toBeUndefined();
+            expect(deactivateResponse.body.data.removeProductionLine.isActive).toBe(false);
+            console.log('🚫 Step 5: ProductionLine deactivated successfully');
+            const finalQueryResponse = await (0, supertest_1.default)(app.getHttpServer())
+                .post('/graphql')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({
+                query: `
+            query ProductionLine($id: String!) {
+              productionLine(id: $id) {
+                id
+                name
+                isActive
+              }
+            }
+          `,
+                variables: { id: productionLineId },
+            })
+                .expect(200);
+            expect(finalQueryResponse.body.errors).toBeUndefined();
+            expect(finalQueryResponse.body.data.productionLine.isActive).toBe(false);
+            console.log('✅ Step 6: Inactive state verified successfully');
+            const auditLogs = await prisma.auditLog.findMany({
+                where: {
+                    entityType: 'ProductionLine',
+                    entityId: productionLineId,
+                },
+                orderBy: { createdAt: 'asc' },
+            });
+            expect(auditLogs).toHaveLength(3);
+            expect(auditLogs[0].action).toBe('CREATE');
+            expect(auditLogs[1].action).toBe('UPDATE');
+            expect(auditLogs[2].action).toBe('DELETE');
+            console.log('📋 Step 7: Complete audit trail verified');
+            console.log('🎉 REG-003: Full ADMIN user workflow completed successfully');
         });
     });
 });

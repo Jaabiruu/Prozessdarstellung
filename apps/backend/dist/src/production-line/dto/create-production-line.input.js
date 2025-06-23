@@ -23,15 +23,19 @@ __decorate([
     (0, graphql_1.Field)(),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)({ message: 'Production line name is required' }),
-    (0, class_validator_1.MinLength)(2, { message: 'Production line name must be at least 2 characters long' }),
-    (0, class_validator_1.MaxLength)(100, { message: 'Production line name must not exceed 100 characters' }),
+    (0, class_validator_1.MinLength)(2, {
+        message: 'Production line name must be at least 2 characters long',
+    }),
+    (0, class_validator_1.MaxLength)(100, {
+        message: 'Production line name must not exceed 100 characters',
+    }),
     __metadata("design:type", String)
 ], CreateProductionLineInput.prototype, "name", void 0);
 __decorate([
     (0, graphql_1.Field)(() => client_1.ProductionLineStatus, {
         nullable: true,
         defaultValue: client_1.ProductionLineStatus.ACTIVE,
-        description: 'Initial status of the production line'
+        description: 'Initial status of the production line',
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.ProductionLineStatus, { message: 'Invalid production line status' }),

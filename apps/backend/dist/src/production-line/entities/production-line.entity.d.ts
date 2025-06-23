@@ -15,4 +15,7 @@ export declare class ProductionLine {
     creator?: User;
     processes?: Process[];
     processCount?: number;
+    _count?: {
+        processes: number;
+    };
 }

@@ -4,10 +4,11 @@ import { AppModule } from '../src/app.module';
 import { TestSetup } from './setup';
 import request from 'supertest';
 import { AuditService } from '../src/audit/audit.service';
+import { PrismaClient } from '@prisma/client';
 
 describe('Audit Trail & Transaction Tests (E2E)', () => {
   let app: INestApplication;
-  let prisma: any;
+  let prisma: PrismaClient;
   let managerToken: string;
   let testProductionLineId: string;
   let auditService: AuditService;
@@ -159,10 +160,12 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
       expect(auditLog.userAgent).toContain('audit-test-client');
 
       // Verify timestamp
-      expect(auditLog.timestamp).toBeDefined();
-      expect(new Date(auditLog.timestamp)).toBeInstanceOf(Date);
+      expect(auditLog.createdAt).toBeDefined();
+      expect(new Date(auditLog.createdAt)).toBeInstanceOf(Date);
 
-      console.log('✅ Audit log created with all required fields for ProductionLine creation');
+      console.log(
+        '✅ Audit log created with all required fields for ProductionLine creation',
+      );
     });
 
     it('should create audit log with correct details for Process update', async () => {
@@ -222,19 +225,22 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
       expect(auditLog.reason).toBe(input.reason);
 
       // Verify details contain both changes and previous values
-      expect(auditLog.details.changes).toMatchObject({
+      const details = auditLog.details as Record<string, unknown>;
+      expect(details.changes).toMatchObject({
         title: input.title,
         description: input.description,
         status: input.status,
       });
 
-      expect(auditLog.details.previousValues).toMatchObject({
+      expect(details.previousValues).toMatchObject({
         title: 'audit-test-process-for-update',
         description: 'Original description',
         status: 'PENDING',
       });
 
-      console.log('✅ Audit log created with correct changes and previous values for Process update');
+      console.log(
+        '✅ Audit log created with correct changes and previous values for Process update',
+      );
     });
 
     it('should capture different IP addresses and user agents correctly', async () => {
@@ -301,7 +307,9 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
         expect(auditLog.userAgent).toBe(testCase.userAgent);
       }
 
-      console.log('✅ Audit logs correctly capture different IP addresses and user agents');
+      console.log(
+        '✅ Audit logs correctly capture different IP addresses and user agents',
+      );
     });
   });
 
@@ -328,7 +336,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
       // Mock the audit service to throw an error
       const originalCreate = auditService.create;
       const mockError = new Error('Simulated audit service failure');
-      
+
       auditService.create = jest.fn().mockRejectedValue(mockError);
 
       // Get the process service to call directly (bypassing GraphQL for precise control)
@@ -346,8 +354,8 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
           },
           'test-user-id',
           '192.168.1.1',
-          'test-client'
-        )
+          'test-client',
+        ),
       ).rejects.toThrow('Simulated audit service failure');
 
       // Restore original audit service
@@ -375,13 +383,17 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
 
       expect(auditLog).toBeNull();
 
-      console.log('✅ CRITICAL TEST PASSED: Failed audit log correctly rolled back parent data change');
+      console.log(
+        '✅ CRITICAL TEST PASSED: Failed audit log correctly rolled back parent data change',
+      );
     });
 
     it('should rollback ProductionLine creation when audit log creation fails', async () => {
       // Mock the audit service to fail
       const originalCreate = auditService.create;
-      auditService.create = jest.fn().mockRejectedValue(new Error('Audit failure during creation'));
+      auditService.create = jest
+        .fn()
+        .mockRejectedValue(new Error('Audit failure during creation'));
 
       const productionLineService = app.get('ProductionLineService');
 
@@ -395,8 +407,8 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
           },
           'test-user-id',
           '192.168.1.1',
-          'test-client'
-        )
+          'test-client',
+        ),
       ).rejects.toThrow('Audit failure during creation');
 
       // Restore original audit service
@@ -411,7 +423,9 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
 
       expect(nonExistentLine).toBeNull();
 
-      console.log('✅ CRITICAL TEST PASSED: Failed audit log correctly prevented ProductionLine creation');
+      console.log(
+        '✅ CRITICAL TEST PASSED: Failed audit log correctly prevented ProductionLine creation',
+      );
     });
 
     it('should handle partial transaction failures correctly', async () => {
@@ -430,7 +444,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
       // Mock audit service to fail on the second call
       const originalCreate = auditService.create;
       let callCount = 0;
-      
+
       auditService.create = jest.fn().mockImplementation((...args) => {
         callCount++;
         if (callCount === 1) {
@@ -455,8 +469,8 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
           },
           'test-user-id',
           '192.168.1.1',
-          'test-client'
-        )
+          'test-client',
+        ),
       ).rejects.toThrow();
 
       // Restore original audit service
@@ -468,9 +482,13 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
       });
 
       expect(unchangedProcess.title).toBe('audit-test-partial-failure');
-      expect(unchangedProcess.description).toBe('Testing partial failure scenarios');
+      expect(unchangedProcess.description).toBe(
+        'Testing partial failure scenarios',
+      );
 
-      console.log('✅ Partial transaction failures handled correctly with proper rollback');
+      console.log(
+        '✅ Partial transaction failures handled correctly with proper rollback',
+      );
     });
   });
 
@@ -522,7 +540,9 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
       expect(auditLog).toBeDefined();
       expect(auditLog.reason).toBe('Testing service boundary transactions');
 
-      console.log('✅ Transaction integrity maintained across service boundaries');
+      console.log(
+        '✅ Transaction integrity maintained across service boundaries',
+      );
     });
 
     it('should handle concurrent transaction conflicts gracefully', async () => {
@@ -596,7 +616,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
           action: 'UPDATE',
         },
         orderBy: {
-          timestamp: 'asc',
+          createdAt: 'asc',
         },
       });
 
@@ -604,7 +624,9 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
       expect(auditLogs[0].reason).toBe('Concurrent test 1');
       expect(auditLogs[1].reason).toBe('Concurrent test 2');
 
-      console.log('✅ Concurrent transactions handled gracefully with proper audit trails');
+      console.log(
+        '✅ Concurrent transactions handled gracefully with proper audit trails',
+      );
     });
   });
 });

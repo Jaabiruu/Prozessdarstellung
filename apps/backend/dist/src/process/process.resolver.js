@@ -23,6 +23,7 @@ const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
 const roles_guard_1 = require("../auth/guards/roles.guard");
 const current_user_decorator_1 = require("../common/decorators/current-user.decorator");
 const roles_decorator_1 = require("../common/decorators/roles.decorator");
+const audit_context_decorator_1 = require("../common/decorators/audit-context.decorator");
 const user_role_enum_1 = require("../common/enums/user-role.enum");
 const client_1 = require("@prisma/client");
 const user_entity_1 = require("../user/entities/user.entity");
@@ -32,10 +33,8 @@ let ProcessResolver = class ProcessResolver {
     constructor(processService) {
         this.processService = processService;
     }
-    async createProcess(createProcessInput, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.processService.create(createProcessInput, currentUser.id, ipAddress, userAgent);
+    async createProcess(createProcessInput, currentUser, auditContext) {
+        return this.processService.create(createProcessInput, currentUser.id, auditContext.ipAddress, auditContext.userAgent);
     }
     async processes(limit, offset, isActive, status, productionLineId) {
         return this.processService.findAll({
@@ -49,23 +48,11 @@ let ProcessResolver = class ProcessResolver {
     async process(id) {
         return this.processService.findOne(id);
     }
-    async processesByProductionLine(productionLineId, limit, offset, isActive, status) {
-        return this.processService.findAllByProductionLine(productionLineId, {
-            limit,
-            offset,
-            ...(isActive !== undefined && { isActive }),
-            ...(status && { status }),
-        });
+    async updateProcess(updateProcessInput, currentUser, auditContext) {
+        return this.processService.update(updateProcessInput, currentUser.id, auditContext.ipAddress, auditContext.userAgent);
     }
-    async updateProcess(updateProcessInput, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.processService.update(updateProcessInput, currentUser.id, ipAddress, userAgent);
-    }
-    async removeProcess(id, reason, currentUser, context) {
-        const ipAddress = context.req?.ip || context.req?.connection?.remoteAddress;
-        const userAgent = context.req?.get('user-agent');
-        return this.processService.remove(id, reason, currentUser.id, ipAddress, userAgent);
+    async removeProcess(id, reason, currentUser, auditContext) {
+        return this.processService.remove(id, reason, currentUser.id, auditContext.ipAddress, auditContext.userAgent);
     }
     async creator(process, context) {
         return context.dataloaders.userLoader.load(process.createdBy);
@@ -80,7 +67,7 @@ __decorate([
     (0, roles_decorator_1.Roles)(user_role_enum_1.UserRole.OPERATOR, user_role_enum_1.UserRole.MANAGER, user_role_enum_1.UserRole.ADMIN),
     __param(0, (0, graphql_1.Args)('input')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
-    __param(2, (0, graphql_1.Context)()),
+    __param(2, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [create_process_input_1.CreateProcessInput, Object, Object]),
     __metadata("design:returntype", Promise)
@@ -106,23 +93,11 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ProcessResolver.prototype, "process", null);
 __decorate([
-    (0, graphql_1.Query)(() => [process_entity_1.Process]),
-    (0, roles_decorator_1.Roles)(user_role_enum_1.UserRole.OPERATOR, user_role_enum_1.UserRole.MANAGER, user_role_enum_1.UserRole.ADMIN, user_role_enum_1.UserRole.QUALITY_ASSURANCE),
-    __param(0, (0, graphql_1.Args)('productionLineId')),
-    __param(1, (0, graphql_1.Args)('limit', { type: () => graphql_1.Int, nullable: true, defaultValue: 100 })),
-    __param(2, (0, graphql_1.Args)('offset', { type: () => graphql_1.Int, nullable: true, defaultValue: 0 })),
-    __param(3, (0, graphql_1.Args)('isActive', { type: () => Boolean, nullable: true })),
-    __param(4, (0, graphql_1.Args)('status', { type: () => client_1.ProcessStatus, nullable: true })),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Number, Number, Boolean, String]),
-    __metadata("design:returntype", Promise)
-], ProcessResolver.prototype, "processesByProductionLine", null);
-__decorate([
     (0, graphql_1.Mutation)(() => process_entity_1.Process),
     (0, roles_decorator_1.Roles)(user_role_enum_1.UserRole.OPERATOR, user_role_enum_1.UserRole.MANAGER, user_role_enum_1.UserRole.ADMIN),
     __param(0, (0, graphql_1.Args)('input')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
-    __param(2, (0, graphql_1.Context)()),
+    __param(2, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [update_process_input_1.UpdateProcessInput, Object, Object]),
     __metadata("design:returntype", Promise)
@@ -133,7 +108,7 @@ __decorate([
     __param(0, (0, graphql_1.Args)('id')),
     __param(1, (0, graphql_1.Args)('reason')),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
-    __param(3, (0, graphql_1.Context)()),
+    __param(3, (0, audit_context_decorator_1.AuditContext)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, Object, Object]),
     __metadata("design:returntype", Promise)

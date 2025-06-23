@@ -1,5 +1,12 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsEmail, IsString, MinLength, IsEnum, IsOptional, IsNotEmpty } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  MinLength,
+  IsEnum,
+  IsOptional,
+  IsNotEmpty,
+} from 'class-validator';
 import { UserRole } from '../../common/enums/user-role.enum';
 
 @InputType()
@@ -29,6 +36,8 @@ export class CreateUserInput {
 
   @Field()
   @IsString()
-  @IsNotEmpty({ message: 'Reason is required for user creation (GxP compliance)' })
+  @IsNotEmpty({
+    message: 'Reason is required for user creation (GxP compliance)',
+  })
   reason!: string;
 }

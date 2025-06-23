@@ -3,10 +3,11 @@ import { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { TestSetup } from './setup';
 import request from 'supertest';
+import { PrismaClient } from '@prisma/client';
 
 describe('User Management System (E2E)', () => {
   let app: INestApplication;
-  let prisma: any;
+  let prisma: PrismaClient;
   let adminToken: string;
   let managerToken: string;
   let adminUserId: string;
@@ -34,7 +35,10 @@ describe('User Management System (E2E)', () => {
     await app.close();
   });
 
-  async function getAuthToken(email: string, password: string): Promise<string> {
+  async function getAuthToken(
+    email: string,
+    password: string,
+  ): Promise<string> {
     const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
@@ -100,7 +104,7 @@ describe('User Management System (E2E)', () => {
       expect(response.body.data.createUser.lastName).toBe('User');
       expect(response.body.data.createUser.role).toBe('OPERATOR');
       expect(response.body.data.createUser.isActive).toBe(true);
-      
+
       // Verify password hash is NOT in response
       expect(response.body.data.createUser.password).toBeNull();
 
@@ -133,9 +137,9 @@ describe('User Management System (E2E)', () => {
       expect(auditLog).toBeDefined();
       expect(auditLog!.userId).toBe(adminUserId);
       expect(auditLog!.reason).toBe('Creating new user for testing');
-      
+
       // Verify audit details
-      const details = auditLog!.details as any;
+      const details = auditLog!.details as Record<string, unknown>;
       expect(details.email).toBe('newuser@test.local');
       expect(details.role).toBe('OPERATOR');
     });
@@ -232,7 +236,9 @@ describe('User Management System (E2E)', () => {
 
       expect(response.body.errors).toBeDefined();
       expect(response.body.errors[0].extensions.code).toBe('CONFLICT');
-      expect(response.body.errors[0].message).toContain('User with this email already exists');
+      expect(response.body.errors[0].message).toContain(
+        'User with this email already exists',
+      );
       expect(response.body.data.createUser).toBeNull();
     });
   });
@@ -274,7 +280,10 @@ describe('User Management System (E2E)', () => {
       const originalLastName = createResponse.body.data.createUser.lastName;
 
       // Verify original user can log in
-      const loginToken = await getAuthToken('pii-test@pharma.local', 'password123');
+      const loginToken = await getAuthToken(
+        'pii-test@pharma.local',
+        'password123',
+      );
       expect(loginToken).toBeDefined();
 
       // Now deactivate and anonymize the user
@@ -307,12 +316,12 @@ describe('User Management System (E2E)', () => {
       // Verify deactivation and anonymization
       expect(deactivatedUser.isActive).toBe(false);
       expect(deactivatedUser.id).toBe(userId); // ID should remain unchanged
-      
+
       // Verify PII fields are anonymized
       expect(deactivatedUser.email).not.toBe(originalEmail);
       expect(deactivatedUser.firstName).not.toBe(originalFirstName);
       expect(deactivatedUser.lastName).not.toBe(originalLastName);
-      
+
       // Verify anonymized values follow expected pattern
       expect(deactivatedUser.email).toMatch(/anonymized_.*@deleted\.local/);
       expect(deactivatedUser.firstName).toMatch(/DELETED_USER_.*/);
@@ -330,8 +339,8 @@ describe('User Management System (E2E)', () => {
 
       expect(auditLog).toBeDefined();
       expect(auditLog!.reason).toBe('Testing PII anonymization compliance');
-      
-      const details = auditLog!.details as any;
+
+      const details = auditLog!.details as Record<string, unknown>;
       expect(details.action).toBe('deactivation_with_pii_anonymization');
       expect(details.originalEmail).toBe(originalEmail);
       expect(details.originalFirstName).toBe(originalFirstName);
@@ -360,8 +369,178 @@ describe('User Management System (E2E)', () => {
         .expect(200);
 
       expect(loginResponse.body.errors).toBeDefined();
-      expect(loginResponse.body.errors[0].message).toContain('Invalid credentials');
+      expect(loginResponse.body.errors[0].message).toContain(
+        'Invalid credentials',
+      );
       expect(loginResponse.body.data.login).toBeNull();
+    });
+  });
+
+  describe('Atomicity & Race Condition Tests', () => {
+    it('should prevent race conditions during concurrent user creates (ATOM-003)', async () => {
+      const createUserMutation = `
+        mutation CreateUser($input: CreateUserInput!) {
+          createUser(input: $input) {
+            id
+            email
+          }
+        }
+      `;
+
+      const input = {
+        email: 'race-test@example.com',
+        password: 'TestPassword123!',
+        firstName: 'Race',
+        lastName: 'Test',
+        role: 'OPERATOR',
+        reason: 'Race condition test',
+      };
+
+      // Execute two identical mutations concurrently
+      const [result1, result2] = await Promise.allSettled([
+        request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            query: createUserMutation,
+            variables: { input },
+          }),
+        request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            query: createUserMutation,
+            variables: { input },
+          }),
+      ]);
+
+      // One should succeed, one should fail
+      const responses = [result1, result2];
+      const successCount = responses.filter(
+        r => r.status === 'fulfilled' && r.value.status === 200 && !r.value.body.errors,
+      ).length;
+      const errorCount = responses.filter(
+        r =>
+          (r.status === 'fulfilled' && (r.value.status !== 200 || r.value.body.errors)) ||
+          r.status === 'rejected',
+      ).length;
+
+      expect(successCount).toBe(1);
+      expect(errorCount).toBe(1);
+
+      // Verify only one record exists
+      const records = await prisma.user.findMany({
+        where: { email: 'race-test@example.com' },
+      });
+      expect(records).toHaveLength(1);
+    });
+
+    it('should handle P2002 errors correctly for email uniqueness (ATOM-005)', async () => {
+      // First create a user
+      const createUserMutation = `
+        mutation CreateUser($input: CreateUserInput!) {
+          createUser(input: $input) {
+            id
+            email
+          }
+        }
+      `;
+
+      await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: createUserMutation,
+          variables: {
+            input: {
+              email: 'p2002-test@example.com',
+              password: 'password123',
+              firstName: 'P2002',
+              lastName: 'Test',
+              role: 'OPERATOR',
+              reason: 'First user for P2002 test',
+            },
+          },
+        });
+
+      // Try to create another user with the same email
+      const response = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: createUserMutation,
+          variables: {
+            input: {
+              email: 'p2002-test@example.com', // Duplicate email
+              password: 'differentpassword',
+              firstName: 'Duplicate',
+              lastName: 'User',
+              role: 'MANAGER',
+              reason: 'Should fail due to duplicate email',
+            },
+          },
+        })
+        .expect(200);
+
+      expect(response.body.errors).toBeDefined();
+      expect(response.body.errors[0].extensions.code).toBe('CONFLICT');
+      expect(response.body.errors[0].message).toContain('already exists');
+      expect(response.body.data.createUser).toBeNull();
+    });
+
+    it('should maintain transaction integrity during user operations', async () => {
+      const initialCount = await prisma.user.count();
+      const initialAuditCount = await prisma.auditLog.count();
+
+      const createUserMutation = `
+        mutation CreateUser($input: CreateUserInput!) {
+          createUser(input: $input) {
+            id
+            email
+            firstName
+            lastName
+          }
+        }
+      `;
+
+      const response = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          query: createUserMutation,
+          variables: {
+            input: {
+              email: 'transaction-integrity@example.com',
+              password: 'TestPassword123!',
+              firstName: 'Transaction',
+              lastName: 'Integrity',
+              role: 'OPERATOR',
+              reason: 'Testing transaction integrity',
+            },
+          },
+        })
+        .expect(200);
+
+      const userId = response.body.data.createUser.id;
+
+      // Verify both user and audit log were created atomically
+      const finalCount = await prisma.user.count();
+      const finalAuditCount = await prisma.auditLog.count();
+
+      expect(finalCount).toBe(initialCount + 1);
+      expect(finalAuditCount).toBeGreaterThan(initialAuditCount);
+
+      // Verify audit log details
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'User',
+          entityId: userId,
+          action: 'CREATE',
+        },
+      });
+
+      expect(auditLog).toBeDefined();
+      expect(auditLog!.reason).toBe('Testing transaction integrity');
     });
   });
 });

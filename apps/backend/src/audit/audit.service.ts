@@ -16,26 +16,17 @@ export class AuditService {
   ): Promise<AuditLog> {
     try {
       const prismaClient = transaction || this.prisma;
-      
-      const createData: any = {
+
+      const createData: Prisma.AuditLogUncheckedCreateInput = {
         userId: auditData.userId,
         action: auditData.action,
         entityType: auditData.entityType,
         entityId: auditData.entityId,
         reason: auditData.reason,
+        ipAddress: auditData.ipAddress ?? undefined,
+        userAgent: auditData.userAgent ?? undefined,
+        details: (auditData.details as Prisma.InputJsonValue) ?? undefined,
       };
-
-      if (auditData.ipAddress) {
-        createData.ipAddress = auditData.ipAddress;
-      }
-
-      if (auditData.userAgent) {
-        createData.userAgent = auditData.userAgent;
-      }
-
-      if (auditData.details) {
-        createData.details = auditData.details;
-      }
 
       const auditLog = await prismaClient.auditLog.create({
         data: createData,
@@ -154,5 +145,4 @@ export class AuditService {
       throw error;
     }
   }
-
 }

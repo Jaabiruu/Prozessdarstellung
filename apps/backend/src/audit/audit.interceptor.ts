@@ -9,8 +9,12 @@ import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { Reflector } from '@nestjs/core';
 import { GqlExecutionContext } from '@nestjs/graphql';
+import { Request } from 'express';
 import { AuditService } from './audit.service';
-import { AuditOptions, AuditContext } from './interfaces/audit-context.interface';
+import {
+  AuditOptions,
+  AuditContext,
+} from './interfaces/audit-context.interface';
 import { AUDIT_METADATA_KEY } from '../common/decorators/audit-metadata.decorator';
 import { AuditAction } from '../common/enums/user-role.enum';
 import { User } from '@prisma/client';
@@ -24,7 +28,7 @@ export class AuditInterceptor implements NestInterceptor {
     private readonly reflector: Reflector,
   ) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const auditOptions = this.reflector.get<AuditOptions>(
       AUDIT_METADATA_KEY,
       context.getHandler(),
@@ -35,9 +39,9 @@ export class AuditInterceptor implements NestInterceptor {
     }
 
     const gqlContext = GqlExecutionContext.create(context);
-    const request = gqlContext.getContext().req;
+    const request = gqlContext.getContext().req as Request & { user: User };
     const user: User = request.user;
-    const args = gqlContext.getArgs();
+    const args = gqlContext.getArgs() as Record<string, unknown>;
 
     if (!user) {
       this.logger.warn('Audit interceptor: No user found in request context');
@@ -45,7 +49,7 @@ export class AuditInterceptor implements NestInterceptor {
     }
 
     return next.handle().pipe(
-      tap(async (result) => {
+      tap(async (result: unknown) => {
         try {
           await this.createAuditLog(auditOptions, user, args, result, request);
         } catch (error) {
@@ -62,9 +66,9 @@ export class AuditInterceptor implements NestInterceptor {
   private async createAuditLog(
     options: AuditOptions,
     user: User,
-    args: any,
-    result: any,
-    request: any,
+    args: Record<string, unknown>,
+    result: unknown,
+    request: Request,
   ): Promise<void> {
     const entityId = this.extractEntityId(options, args, result);
     const reason = this.extractReason(args);
@@ -76,62 +80,109 @@ export class AuditInterceptor implements NestInterceptor {
       entityType: options.entityType,
       entityId,
       reason,
-      ipAddress: request.ip || request.connection?.remoteAddress || null,
+      ipAddress:
+        request.ip ||
+        (request as unknown as { connection?: { remoteAddress?: string } })
+          .connection?.remoteAddress ||
+        null,
       userAgent: request.get('user-agent') || null,
-      details: options.includeDetails ? this.extractDetails(args, result) : null,
+      details: options.includeDetails
+        ? this.extractDetails(args, result)
+        : null,
     };
 
     await this.auditService.createFromContext(auditContext);
   }
 
-  private extractEntityId(options: AuditOptions, args: any, result: any): string {
+  private extractEntityId(
+    options: AuditOptions,
+    args: Record<string, unknown>,
+    result: unknown,
+  ): string {
     if (options.extractEntityId) {
       return options.extractEntityId(args, result);
     }
 
-    if (result && result.id) {
-      return result.id;
+    if (
+      result &&
+      typeof result === 'object' &&
+      result !== null &&
+      'id' in result
+    ) {
+      return (result as { id: string }).id;
     }
 
-    if (args.id) {
+    if (args.id && typeof args.id === 'string') {
       return args.id;
     }
 
-    if (args.input && args.input.id) {
-      return args.input.id;
+    if (
+      args.input &&
+      typeof args.input === 'object' &&
+      args.input !== null &&
+      'id' in args.input
+    ) {
+      return (args.input as { id: string }).id;
     }
 
-    throw new Error(`Cannot extract entity ID for audit log: ${options.entityType}`);
+    throw new Error(
+      `Cannot extract entity ID for audit log: ${options.entityType}`,
+    );
   }
 
-  private extractReason(args: any): string {
-    if (args.input && args.input.reason) {
-      return args.input.reason;
+  private extractReason(args: Record<string, unknown>): string {
+    if (
+      args.input &&
+      typeof args.input === 'object' &&
+      args.input !== null &&
+      'reason' in args.input
+    ) {
+      const reason = (args.input as { reason: unknown }).reason;
+      if (typeof reason === 'string') {
+        return reason;
+      }
     }
 
-    if (args.reason) {
+    if (args.reason && typeof args.reason === 'string') {
       return args.reason;
     }
 
     throw new Error('Audit reason is required but not provided');
   }
 
-  private determineAction(options: AuditOptions, args: any): AuditAction {
+  private determineAction(
+    options: AuditOptions,
+    args: Record<string, unknown>,
+  ): AuditAction {
     if (options.action) {
       return options.action;
     }
 
-    if (args.input && args.input.action) {
-      return args.input.action;
+    if (
+      args.input &&
+      typeof args.input === 'object' &&
+      args.input !== null &&
+      'action' in args.input
+    ) {
+      const action = (args.input as { action: unknown }).action;
+      if (
+        typeof action === 'string' &&
+        Object.values(AuditAction).includes(action as AuditAction)
+      ) {
+        return action as AuditAction;
+      }
     }
 
     const handlerName = args.constructor?.name || 'unknown';
-    
+
     if (handlerName.toLowerCase().includes('create')) {
       return AuditAction.CREATE;
     } else if (handlerName.toLowerCase().includes('update')) {
       return AuditAction.UPDATE;
-    } else if (handlerName.toLowerCase().includes('delete') || handlerName.toLowerCase().includes('remove')) {
+    } else if (
+      handlerName.toLowerCase().includes('delete') ||
+      handlerName.toLowerCase().includes('remove')
+    ) {
       return AuditAction.DELETE;
     } else if (handlerName.toLowerCase().includes('approve')) {
       return AuditAction.APPROVE;
@@ -142,24 +193,27 @@ export class AuditInterceptor implements NestInterceptor {
     return AuditAction.UPDATE;
   }
 
-  private extractDetails(args: any, result: any): Record<string, any> {
+  private extractDetails(
+    args: Record<string, unknown>,
+    result: unknown,
+  ): Record<string, unknown> {
     return {
       args: this.sanitizeForAudit(args),
       result: this.sanitizeForAudit(result),
     };
   }
 
-  private sanitizeForAudit(data: any): any {
+  private sanitizeForAudit(data: unknown): unknown {
     if (!data || typeof data !== 'object') {
       return data;
     }
 
-    const sanitized = { ...data };
-    
+    const sanitized = { ...(data as Record<string, unknown>) };
+
     const sensitiveFields = ['password', 'token', 'secret', 'key'];
-    
+
     for (const field of sensitiveFields) {
-      if (sanitized[field]) {
+      if (field in sanitized && sanitized[field]) {
         sanitized[field] = '[REDACTED]';
       }
     }

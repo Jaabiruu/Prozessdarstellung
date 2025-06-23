@@ -18,9 +18,4 @@ export declare class ProductionLineService {
     findOne(id: string): Promise<ProductionLine>;
     update(updateProductionLineInput: UpdateProductionLineInput, currentUserId: string, ipAddress?: string, userAgent?: string): Promise<ProductionLine>;
     remove(id: string, reason: string, currentUserId: string, ipAddress?: string, userAgent?: string): Promise<ProductionLine>;
-    findProcessesByProductionLine(productionLineId: string, options?: {
-        limit?: number;
-        offset?: number;
-        isActive?: boolean;
-    }): Promise<any[]>;
 }
