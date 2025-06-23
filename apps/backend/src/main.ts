@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from './config';
+import { TracingService } from './common/tracing';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -9,6 +10,7 @@ async function bootstrap() {
   try {
     const app = await NestFactory.create(AppModule);
     const configService = app.get(ConfigService);
+    const tracingService = app.get(TracingService);
 
     app.useGlobalPipes(
       new ValidationPipe({
@@ -33,6 +35,7 @@ async function bootstrap() {
     logger.log(`📊 GraphQL Playground: http://localhost:${port}/graphql`);
     logger.log(`🏥 Health Check: http://localhost:${port}/health`);
     logger.log(`🌍 Environment: ${configService.nodeEnv}`);
+    logger.log(`📡 OpenTelemetry tracing enabled`);
   } catch (error) {
     logger.error('Failed to start application', error);
     process.exit(1);

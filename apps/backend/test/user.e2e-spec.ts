@@ -10,9 +10,14 @@ describe('User Management System (E2E)', () => {
   let prisma: PrismaClient;
   let adminToken: string;
   let managerToken: string;
+  let operatorToken: string;
   let adminUserId: string;
+  let managerUserId: string;
+  let operatorUserId: string;
 
   beforeAll(async () => {
+    await TestSetup.beforeAll();
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -22,41 +27,71 @@ describe('User Management System (E2E)', () => {
 
     prisma = TestSetup.getPrisma();
 
-    // Get admin token and user ID
-    const adminUser = await prisma.user.findUnique({
-      where: { email: 'admin@test.local' },
-    });
-    adminUserId = adminUser.id;
-    adminToken = await getAuthToken('admin@test.local', 'admin123');
-    managerToken = await getAuthToken('manager@test.local', 'manager123');
+    // Get authentication tokens and user IDs for different roles
+    await getAuthTokensAndUserIds();
   });
 
   afterAll(async () => {
     await app.close();
+    await TestSetup.afterAll();
   });
 
-  async function getAuthToken(
-    email: string,
-    password: string,
-  ): Promise<string> {
+  async function getAuthTokensAndUserIds() {
     const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
+          user {
+            id
+          }
           accessToken
         }
       }
     `;
 
-    const response = await request(app.getHttpServer())
+    // Get admin token and user ID
+    const adminResponse = await request(app.getHttpServer())
       .post('/graphql')
       .send({
         query: loginMutation,
         variables: {
-          input: { email, password },
+          input: {
+            email: 'admin@test.local',
+            password: 'admin123',
+          },
         },
       });
+    adminToken = adminResponse.body.data.login.accessToken;
+    adminUserId = adminResponse.body.data.login.user.id;
 
-    return response.body.data.login.accessToken;
+    // Get manager token and user ID
+    const managerResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'manager@test.local',
+            password: 'manager123',
+          },
+        },
+      });
+    managerToken = managerResponse.body.data.login.accessToken;
+    managerUserId = managerResponse.body.data.login.user.id;
+
+    // Get operator token and user ID
+    const operatorResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'operator@test.local',
+            password: 'operator123',
+          },
+        },
+      });
+    operatorToken = operatorResponse.body.data.login.accessToken;
+    operatorUserId = operatorResponse.body.data.login.user.id;
   }
 
   describe('USER-001: ADMIN can create a new user', () => {
@@ -280,11 +315,24 @@ describe('User Management System (E2E)', () => {
       const originalLastName = createResponse.body.data.createUser.lastName;
 
       // Verify original user can log in
-      const loginToken = await getAuthToken(
-        'pii-test@pharma.local',
-        'password123',
-      );
-      expect(loginToken).toBeDefined();
+      const loginResponse = await request(app.getHttpServer())
+        .post('/graphql')
+        .send({
+          query: `
+            mutation Login($input: LoginInput!) {
+              login(input: $input) {
+                accessToken
+              }
+            }
+          `,
+          variables: {
+            input: {
+              email: 'pii-test@pharma.local',
+              password: 'password123',
+            },
+          },
+        });
+      expect(loginResponse.body.data.login.accessToken).toBeDefined();
 
       // Now deactivate and anonymize the user
       const deactivateUserMutation = `
@@ -417,11 +465,15 @@ describe('User Management System (E2E)', () => {
       // One should succeed, one should fail
       const responses = [result1, result2];
       const successCount = responses.filter(
-        r => r.status === 'fulfilled' && r.value.status === 200 && !r.value.body.errors,
+        r =>
+          r.status === 'fulfilled' &&
+          r.value.status === 200 &&
+          !r.value.body.errors,
       ).length;
       const errorCount = responses.filter(
         r =>
-          (r.status === 'fulfilled' && (r.value.status !== 200 || r.value.body.errors)) ||
+          (r.status === 'fulfilled' &&
+            (r.value.status !== 200 || r.value.body.errors)) ||
           r.status === 'rejected',
       ).length;
 

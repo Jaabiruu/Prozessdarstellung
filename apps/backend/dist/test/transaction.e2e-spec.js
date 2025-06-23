@@ -1,14 +1,47 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 const testing_1 = require("@nestjs/testing");
+const request = __importStar(require("supertest"));
 const app_module_1 = require("../src/app.module");
-const prisma_service_1 = require("../src/database/prisma.service");
+const setup_1 = require("./setup");
 const production_line_service_1 = require("../src/production-line/production-line.service");
 const process_service_1 = require("../src/process/process.service");
 const user_service_1 = require("../src/user/user.service");
 const audit_service_1 = require("../src/audit/audit.service");
 const auth_service_1 = require("../src/auth/auth.service");
-const user_role_enum_1 = require("../src/common/enums/user-role.enum");
 describe('Cross-Cutting Transaction Management (E2E)', () => {
     let app;
     let prisma;
@@ -17,49 +50,85 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
     let userService;
     let auditService;
     let authService;
-    let testUserId;
+    let adminToken;
+    let managerToken;
+    let operatorToken;
+    let adminUserId;
+    let managerUserId;
+    let operatorUserId;
     beforeAll(async () => {
+        await setup_1.TestSetup.beforeAll();
         const moduleFixture = await testing_1.Test.createTestingModule({
             imports: [app_module_1.AppModule],
         }).compile();
         app = moduleFixture.createNestApplication();
         await app.init();
-        prisma = moduleFixture.get(prisma_service_1.PrismaService);
+        prisma = setup_1.TestSetup.getPrisma();
         productionLineService = moduleFixture.get(production_line_service_1.ProductionLineService);
         processService = moduleFixture.get(process_service_1.ProcessService);
         userService = moduleFixture.get(user_service_1.UserService);
         auditService = moduleFixture.get(audit_service_1.AuditService);
         authService = moduleFixture.get(auth_service_1.AuthService);
-        const testUser = await userService.create({
-            email: 'transaction-test@example.com',
-            password: 'TestPassword123!',
-            firstName: 'Transaction',
-            lastName: 'Test',
-            role: user_role_enum_1.UserRole.ADMIN,
-            reason: 'Transaction test user creation',
-        }, 'test-user-id', '127.0.0.1', 'test-agent');
-        testUserId = testUser.id;
+        await getAuthTokensAndUserIds();
     });
     afterAll(async () => {
-        try {
-            await prisma.auditLog.deleteMany({ where: { userId: testUserId } });
-            await prisma.process.deleteMany({});
-            await prisma.productionLine.deleteMany({});
-            await prisma.user.deleteMany({
-                where: { email: 'transaction-test@example.com' },
-            });
-        }
-        catch (error) {
-            console.warn('Cleanup error:', error);
-        }
-        finally {
-            await prisma.$disconnect();
-            await app.close();
-        }
+        await app.close();
+        await setup_1.TestSetup.afterAll();
     });
     afterEach(async () => {
         jest.restoreAllMocks();
     });
+    async function getAuthTokensAndUserIds() {
+        const loginMutation = `
+      mutation Login($input: LoginInput!) {
+        login(input: $input) {
+          user {
+            id
+          }
+          accessToken
+        }
+      }
+    `;
+        const adminResponse = await request(app.getHttpServer())
+            .post('/graphql')
+            .send({
+            query: loginMutation,
+            variables: {
+                input: {
+                    email: 'admin@test.local',
+                    password: 'admin123',
+                },
+            },
+        });
+        adminToken = adminResponse.body.data.login.accessToken;
+        adminUserId = adminResponse.body.data.login.user.id;
+        const managerResponse = await request(app.getHttpServer())
+            .post('/graphql')
+            .send({
+            query: loginMutation,
+            variables: {
+                input: {
+                    email: 'manager@test.local',
+                    password: 'manager123',
+                },
+            },
+        });
+        managerToken = managerResponse.body.data.login.accessToken;
+        managerUserId = managerResponse.body.data.login.user.id;
+        const operatorResponse = await request(app.getHttpServer())
+            .post('/graphql')
+            .send({
+            query: loginMutation,
+            variables: {
+                input: {
+                    email: 'operator@test.local',
+                    password: 'operator123',
+                },
+            },
+        });
+        operatorToken = operatorResponse.body.data.login.accessToken;
+        operatorUserId = operatorResponse.body.data.login.user.id;
+    }
     describe('ATOM-001: Transaction Rollback on Audit Failure', () => {
         it('should rollback entire transaction when audit logging fails', async () => {
             const originalCreate = auditService.create;
@@ -71,7 +140,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
                 await productionLineService.create({
                     name: 'ROLLBACK_TEST_LINE',
                     reason: 'Test line for rollback',
-                }, testUserId, '127.0.0.1', 'test-agent');
+                }, adminUserId, '127.0.0.1', 'test-agent');
                 fail('Expected method to throw an error');
             }
             catch (error) {
@@ -95,7 +164,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
             const productionLine = await productionLineService.create({
                 name: 'SERVICE_FAILURE_TEST',
                 reason: 'Test line for service failure',
-            }, testUserId, '127.0.0.1', 'test-agent');
+            }, adminUserId, '127.0.0.1', 'test-agent');
             const originalTransaction = prisma.$transaction;
             prisma.$transaction = jest.fn().mockImplementation(async () => {
                 throw new Error('Database transaction failure');
@@ -107,7 +176,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
                     productionLineId: productionLine.id,
                     status: 'IN_PROGRESS',
                     progress: 0,
-                }, testUserId, '127.0.0.1', 'test-agent');
+                }, adminUserId, '127.0.0.1', 'test-agent');
                 fail('Expected method to throw an error');
             }
             catch (error) {
@@ -120,7 +189,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
             const finalAuditCount = await prisma.auditLog.count();
             expect(finalAuditCount).toBe(initialAuditCount + 1);
             prisma.$transaction = originalTransaction;
-            await productionLineService.remove(productionLine.id, 'Test cleanup', testUserId);
+            await productionLineService.remove(productionLine.id, 'Test cleanup', adminUserId);
         });
     });
     describe('ATOM-005: Successful Creation is Fully Atomic', () => {
@@ -130,7 +199,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
             const result = await productionLineService.create({
                 name: 'ATOMIC_SUCCESS_TEST',
                 reason: 'Test for successful atomic creation',
-            }, testUserId, '127.0.0.1', 'test-agent');
+            }, adminUserId, '127.0.0.1', 'test-agent');
             expect(result).toBeDefined();
             expect(result.name).toBe('ATOMIC_SUCCESS_TEST');
             const finalProductionLineCount = await prisma.productionLine.count();
@@ -146,7 +215,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
                 orderBy: { createdAt: 'desc' },
             });
             expect(auditLog).toBeDefined();
-            expect(auditLog.userId).toBe(testUserId);
+            expect(auditLog.userId).toBe(adminUserId);
             expect(auditLog.ipAddress).toBe('127.0.0.1');
             expect(auditLog.userAgent).toBe('test-agent');
             await productionLineService.remove(result.id, 'Test cleanup', testUserId);
@@ -160,7 +229,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
             const line = await productionLineService.create({
                 name: 'TRANSACTION_TEST',
                 reason: 'Transaction management test',
-            }, testUserId, '127.0.0.1', 'test-agent');
+            }, adminUserId, '127.0.0.1', 'test-agent');
             expect(line).toBeDefined();
             await productionLineService.remove(line.id, 'Test cleanup', testUserId);
         });
@@ -171,14 +240,14 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
             const productionLine = await productionLineService.create({
                 name: 'MULTI_OP_TEST_LINE',
                 reason: 'Testing multi-operation transaction integrity',
-            }, testUserId, '127.0.0.1', 'test-agent');
+            }, adminUserId, '127.0.0.1', 'test-agent');
             const process = await processService.create({
                 title: 'MULTI_OP_TEST_PROCESS',
                 description: 'Process for multi-operation test',
                 productionLineId: productionLine.id,
                 status: 'IN_PROGRESS',
                 progress: 50,
-            }, testUserId, '127.0.0.1', 'test-agent');
+            }, adminUserId, '127.0.0.1', 'test-agent');
             const finalProductionLineCount = await prisma.productionLine.count();
             const finalProcessCount = await prisma.process.count();
             const finalAuditCount = await prisma.auditLog.count();
@@ -202,7 +271,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
             expect(productionLineAudit).toBeDefined();
             expect(processAudit).toBeDefined();
             await processService.remove(process.id, 'Test cleanup', testUserId);
-            await productionLineService.remove(productionLine.id, 'Test cleanup', testUserId);
+            await productionLineService.remove(productionLine.id, 'Test cleanup', adminUserId);
         });
     });
 });

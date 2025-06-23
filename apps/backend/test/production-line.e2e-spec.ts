@@ -11,8 +11,13 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
   let adminToken: string;
   let managerToken: string;
   let operatorToken: string;
+  let adminUserId: string;
+  let managerUserId: string;
+  let operatorUserId: string;
 
   beforeAll(async () => {
+    await TestSetup.beforeAll();
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -22,12 +27,13 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
 
     prisma = TestSetup.getPrisma();
 
-    // Get authentication tokens for different roles
-    await getAuthTokens();
+    // Get authentication tokens and user IDs for different roles
+    await getAuthTokensAndUserIds();
   });
 
   afterAll(async () => {
     await app.close();
+    await TestSetup.afterAll();
   });
 
   beforeEach(async () => {
@@ -41,16 +47,19 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
     });
   });
 
-  async function getAuthTokens() {
+  async function getAuthTokensAndUserIds() {
     const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
+          user {
+            id
+          }
           accessToken
         }
       }
     `;
 
-    // Get admin token
+    // Get admin token and user ID
     const adminResponse = await request(app.getHttpServer())
       .post('/graphql')
       .send({
@@ -63,8 +72,9 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
         },
       });
     adminToken = adminResponse.body.data.login.accessToken;
+    adminUserId = adminResponse.body.data.login.user.id;
 
-    // Get manager token
+    // Get manager token and user ID
     const managerResponse = await request(app.getHttpServer())
       .post('/graphql')
       .send({
@@ -77,8 +87,9 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
         },
       });
     managerToken = managerResponse.body.data.login.accessToken;
+    managerUserId = managerResponse.body.data.login.user.id;
 
-    // Get operator token
+    // Get operator token and user ID
     const operatorResponse = await request(app.getHttpServer())
       .post('/graphql')
       .send({
@@ -91,6 +102,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
         },
       });
     operatorToken = operatorResponse.body.data.login.accessToken;
+    operatorUserId = operatorResponse.body.data.login.user.id;
   }
 
   describe('CRUD-001: A user can create a ProductionLine', () => {
@@ -270,7 +282,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
         data: {
           name: 'test-line-to-deactivate',
           status: 'ACTIVE',
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Setup for deactivation test',
         },
       });
@@ -325,7 +337,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
           name: 'test-already-inactive',
           status: 'ACTIVE',
           isActive: false, // Already inactive
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Pre-deactivated for test',
         },
       });
@@ -409,7 +421,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
           data: {
             name: `test-pagination-line-${i.toString().padStart(2, '0')}`,
             status: 'ACTIVE',
-            createdBy: 'test-user-id',
+            createdBy: managerUserId,
             reason: `Setup for pagination test ${i}`,
           },
         });
@@ -465,7 +477,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
           data: {
             name: `test-offset-line-${i}`,
             status: 'ACTIVE',
-            createdBy: 'test-user-id',
+            createdBy: managerUserId,
             reason: `Setup for offset test ${i}`,
           },
         });
@@ -553,7 +565,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
         data: {
           name: 'test-audit-deactivation',
           status: 'ACTIVE',
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Setup for audit test',
         },
       });
@@ -637,11 +649,15 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
       // One should succeed, one should fail
       const responses = [result1, result2];
       const successCount = responses.filter(
-        r => r.status === 'fulfilled' && r.value.status === 200 && !r.value.body.errors,
+        r =>
+          r.status === 'fulfilled' &&
+          r.value.status === 200 &&
+          !r.value.body.errors,
       ).length;
       const errorCount = responses.filter(
         r =>
-          (r.status === 'fulfilled' && (r.value.status !== 200 || r.value.body.errors)) ||
+          (r.status === 'fulfilled' &&
+            (r.value.status !== 200 || r.value.body.errors)) ||
           r.status === 'rejected',
       ).length;
 
@@ -761,7 +777,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
           data: {
             name: `perf-test-line-${i}`,
             status: 'ACTIVE',
-            createdBy: 'test-user-id',
+            createdBy: managerUserId,
             reason: `Performance test line ${i}`,
           },
         });
@@ -778,7 +794,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
               y: 200.0 * i,
               color: '#4F46E5',
               productionLineId: line.id,
-              createdBy: 'test-user-id',
+              createdBy: managerUserId,
               reason: `Performance test process ${i}-${j}`,
             },
           });
@@ -876,7 +892,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
           expect(line.processes).toHaveLength(2);
 
           // Verify processes belong to the correct production line
-          line.processes.forEach((process) => {
+          line.processes.forEach(process => {
             expect(process.title).toMatch(/perf-test-process-\d+-\d+/);
           });
 
@@ -935,14 +951,16 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
     it('should not have cross-entity methods in ProductionLineService (ARCH-001)', () => {
       // Verify ProductionLineService doesn't have methods for managing other entities
       const productionLineService = app.get('ProductionLineService');
-      
+
       // These methods should NOT exist (violate SRP)
-      expect((productionLineService as any).findProcessesByProductionLine).toBeUndefined();
+      expect(
+        (productionLineService as any).findProcessesByProductionLine,
+      ).toBeUndefined();
       expect((productionLineService as any).createProcess).toBeUndefined();
       expect((productionLineService as any).updateProcess).toBeUndefined();
       expect((productionLineService as any).removeProcess).toBeUndefined();
       expect((productionLineService as any).getProcessCount).toBeUndefined();
-      
+
       // These methods SHOULD exist (within SRP)
       expect(productionLineService.findAll).toBeDefined();
       expect(productionLineService.findOne).toBeDefined();
@@ -972,7 +990,7 @@ describe('ProductionLine Entity CRUD Operations (E2E)', () => {
 
       expect(response.body.errors).toBeDefined();
       expect(response.body.errors[0].message).toContain('Cannot query field');
-      
+
       // Verify the field resolver approach is used instead
       const validQuery = `
         query {

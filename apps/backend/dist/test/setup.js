@@ -47,8 +47,8 @@ const redis = new ioredis_1.default(process.env['REDIS_URL'] || 'redis://localho
 class TestSetup {
     static async beforeAll() {
         try {
-            await this.resetDatabase();
             await redis.flushdb();
+            await this.seedTestDatabase();
             console.log('✅ Test environment setup completed');
         }
         catch (error) {
@@ -60,7 +60,9 @@ class TestSetup {
         try {
             await this.cleanupDatabase();
             await prisma.$disconnect();
-            await redis.quit();
+            if (redis.status === 'ready' || redis.status === 'connect') {
+                await redis.quit();
+            }
             console.log('✅ Test environment cleanup completed');
         }
         catch (error) {
@@ -92,6 +94,20 @@ class TestSetup {
         }
     }
     static async cleanupTestData() {
+        await prisma.process.deleteMany({
+            where: {
+                title: {
+                    contains: 'test-',
+                },
+            },
+        });
+        await prisma.productionLine.deleteMany({
+            where: {
+                name: {
+                    contains: 'test-',
+                },
+            },
+        });
         await prisma.auditLog.deleteMany({
             where: {
                 OR: [
@@ -105,51 +121,91 @@ class TestSetup {
         });
         await prisma.user.deleteMany({
             where: {
-                email: {
-                    contains: 'test',
-                },
+                AND: [
+                    {
+                        email: {
+                            contains: 'test',
+                        },
+                    },
+                    {
+                        email: {
+                            not: {
+                                in: [
+                                    'admin@test.local',
+                                    'manager@test.local',
+                                    'operator@test.local',
+                                ],
+                            },
+                        },
+                    },
+                ],
             },
         });
     }
     static async seedTestDatabase() {
         const bcrypt = await Promise.resolve().then(() => __importStar(require('bcrypt')));
-        await prisma.user.upsert({
-            where: { email: 'admin@test.local' },
-            update: {},
-            create: {
-                email: 'admin@test.local',
-                password: await bcrypt.hash('admin123', 12),
-                firstName: 'Test',
-                lastName: 'Admin',
-                role: 'ADMIN',
-                isActive: true,
-            },
-        });
-        await prisma.user.upsert({
-            where: { email: 'manager@test.local' },
-            update: {},
-            create: {
-                email: 'manager@test.local',
-                password: await bcrypt.hash('manager123', 12),
-                firstName: 'Test',
-                lastName: 'Manager',
-                role: 'MANAGER',
-                isActive: true,
-            },
-        });
-        await prisma.user.upsert({
-            where: { email: 'operator@test.local' },
-            update: {},
-            create: {
-                email: 'operator@test.local',
-                password: await bcrypt.hash('operator123', 12),
-                firstName: 'Test',
-                lastName: 'Operator',
-                role: 'OPERATOR',
-                isActive: true,
-            },
-        });
-        console.log('✅ Test database seeded with test users');
+        try {
+            await prisma.$transaction(async (tx) => {
+                await tx.user.upsert({
+                    where: { email: 'admin@test.local' },
+                    update: {},
+                    create: {
+                        email: 'admin@test.local',
+                        password: await bcrypt.hash('admin123', 12),
+                        firstName: 'Test',
+                        lastName: 'Admin',
+                        role: 'ADMIN',
+                        isActive: true,
+                    },
+                });
+                await tx.user.upsert({
+                    where: { email: 'manager@test.local' },
+                    update: {},
+                    create: {
+                        email: 'manager@test.local',
+                        password: await bcrypt.hash('manager123', 12),
+                        firstName: 'Test',
+                        lastName: 'Manager',
+                        role: 'MANAGER',
+                        isActive: true,
+                    },
+                });
+                await tx.user.upsert({
+                    where: { email: 'operator@test.local' },
+                    update: {},
+                    create: {
+                        email: 'operator@test.local',
+                        password: await bcrypt.hash('operator123', 12),
+                        firstName: 'Test',
+                        lastName: 'Operator',
+                        role: 'OPERATOR',
+                        isActive: true,
+                    },
+                });
+                await tx.user.upsert({
+                    where: { email: 'deactivated@test.local' },
+                    update: {},
+                    create: {
+                        email: 'deactivated@test.local',
+                        password: await bcrypt.hash('deactivated123', 12),
+                        firstName: 'Test',
+                        lastName: 'Deactivated',
+                        role: 'OPERATOR',
+                        isActive: false,
+                    },
+                });
+            });
+            console.log('✅ Test database seeded with test users');
+        }
+        catch (error) {
+            if (error instanceof Error &&
+                error.message.includes('Unique constraint')) {
+                console.log('✅ Test users already exist, skipping seed');
+            }
+            else {
+                throw error;
+            }
+        }
     }
     static getPrisma() {
         return prisma;

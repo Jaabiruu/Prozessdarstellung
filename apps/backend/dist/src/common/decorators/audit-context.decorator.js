@@ -6,8 +6,10 @@ const graphql_1 = require("@nestjs/graphql");
 exports.AuditContext = (0, common_1.createParamDecorator)((_data, context) => {
     const ctx = graphql_1.GqlExecutionContext.create(context);
     const request = ctx.getContext().req;
+    const forwardedFor = request?.get('X-Forwarded-For');
+    const ipAddress = forwardedFor?.split(',')[0]?.trim() || request?.ip || null;
     return {
-        ipAddress: request?.ip || null,
+        ipAddress,
         userAgent: request?.get('user-agent') || null,
     };
 });

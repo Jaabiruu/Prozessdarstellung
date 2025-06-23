@@ -13,37 +13,73 @@ describe('Authorization System (RBAC) (E2E)', () => {
     let adminToken;
     let managerToken;
     let operatorToken;
+    let adminUserId;
+    let managerUserId;
+    let operatorUserId;
     beforeAll(async () => {
+        await setup_1.TestSetup.beforeAll();
         const moduleFixture = await testing_1.Test.createTestingModule({
             imports: [app_module_1.AppModule],
         }).compile();
         app = moduleFixture.createNestApplication();
         await app.init();
         prisma = setup_1.TestSetup.getPrisma();
-        adminToken = await getAuthToken('admin@test.local', 'admin123');
-        managerToken = await getAuthToken('manager@test.local', 'manager123');
-        operatorToken = await getAuthToken('operator@test.local', 'operator123');
+        await getAuthTokensAndUserIds();
     });
     afterAll(async () => {
         await app.close();
+        await setup_1.TestSetup.afterAll();
     });
-    async function getAuthToken(email, password) {
+    async function getAuthTokensAndUserIds() {
         const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
+          user {
+            id
+          }
           accessToken
         }
       }
     `;
-        const response = await (0, supertest_1.default)(app.getHttpServer())
+        const adminResponse = await (0, supertest_1.default)(app.getHttpServer())
             .post('/graphql')
             .send({
             query: loginMutation,
             variables: {
-                input: { email, password },
+                input: {
+                    email: 'admin@test.local',
+                    password: 'admin123',
+                },
             },
         });
-        return response.body.data.login.accessToken;
+        adminToken = adminResponse.body.data.login.accessToken;
+        adminUserId = adminResponse.body.data.login.user.id;
+        const managerResponse = await (0, supertest_1.default)(app.getHttpServer())
+            .post('/graphql')
+            .send({
+            query: loginMutation,
+            variables: {
+                input: {
+                    email: 'manager@test.local',
+                    password: 'manager123',
+                },
+            },
+        });
+        managerToken = managerResponse.body.data.login.accessToken;
+        managerUserId = managerResponse.body.data.login.user.id;
+        const operatorResponse = await (0, supertest_1.default)(app.getHttpServer())
+            .post('/graphql')
+            .send({
+            query: loginMutation,
+            variables: {
+                input: {
+                    email: 'operator@test.local',
+                    password: 'operator123',
+                },
+            },
+        });
+        operatorToken = operatorResponse.body.data.login.accessToken;
+        operatorUserId = operatorResponse.body.data.login.user.id;
     }
     describe('RBAC-001: ADMIN user can access admin-only endpoint', () => {
         it('should allow ADMIN to create a user', async () => {

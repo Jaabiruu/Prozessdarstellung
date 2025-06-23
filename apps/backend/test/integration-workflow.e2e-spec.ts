@@ -8,10 +8,16 @@ import { PrismaClient } from '@prisma/client';
 describe('Integration & End-to-End Workflow Tests (E2E)', () => {
   let app: INestApplication;
   let prisma: PrismaClient;
+  let adminToken: string;
   let managerToken: string;
   let operatorToken: string;
+  let adminUserId: string;
+  let managerUserId: string;
+  let operatorUserId: string;
 
   beforeAll(async () => {
+    await TestSetup.beforeAll();
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -21,12 +27,13 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
 
     prisma = TestSetup.getPrisma();
 
-    // Get authentication tokens
-    await getAuthTokens();
+    // Get authentication tokens and user IDs for different roles
+    await getAuthTokensAndUserIds();
   });
 
   afterAll(async () => {
     await app.close();
+    await TestSetup.afterAll();
   });
 
   beforeEach(async () => {
@@ -44,16 +51,34 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
     });
   });
 
-  async function getAuthTokens() {
+  async function getAuthTokensAndUserIds() {
     const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
+          user {
+            id
+          }
           accessToken
         }
       }
     `;
 
-    // Get manager token
+    // Get admin token and user ID
+    const adminResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'admin@test.local',
+            password: 'admin123',
+          },
+        },
+      });
+    adminToken = adminResponse.body.data.login.accessToken;
+    adminUserId = adminResponse.body.data.login.user.id;
+
+    // Get manager token and user ID
     const managerResponse = await request(app.getHttpServer())
       .post('/graphql')
       .send({
@@ -66,8 +91,9 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         },
       });
     managerToken = managerResponse.body.data.login.accessToken;
+    managerUserId = managerResponse.body.data.login.user.id;
 
-    // Get operator token
+    // Get operator token and user ID
     const operatorResponse = await request(app.getHttpServer())
       .post('/graphql')
       .send({
@@ -80,6 +106,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         },
       });
     operatorToken = operatorResponse.body.data.login.accessToken;
+    operatorUserId = operatorResponse.body.data.login.user.id;
   }
 
   describe('Complete Business Workflow: Create ProductionLine → Add Processes → Update → Deactivate', () => {
@@ -529,7 +556,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         data: {
           name: 'workflow-test-cascade-protection',
           status: 'ACTIVE',
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Testing cascade protection',
         },
       });
@@ -539,7 +566,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
           title: 'workflow-test-cascade-process',
           description: 'Process for cascade testing',
           productionLineId: productionLine.id,
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Testing cascade relationships',
         },
       });
@@ -631,7 +658,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
           data: {
             name: `workflow-test-pagination-${i.toString().padStart(2, '0')}`,
             status: 'ACTIVE',
-            createdBy: 'test-user-id',
+            createdBy: managerUserId,
             reason: `Pagination test ${i}`,
           },
         });
@@ -683,7 +710,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         data: {
           name: 'workflow-test-load-consistency',
           status: 'ACTIVE',
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Load testing',
         },
       });
@@ -821,7 +848,9 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         .expect(200);
 
       expect(createResponse.body.errors).toBeUndefined();
-      expect(createResponse.body.data.createProductionLine.name).toBe('REG-003-ADMIN-TEST-LINE');
+      expect(createResponse.body.data.createProductionLine.name).toBe(
+        'REG-003-ADMIN-TEST-LINE',
+      );
       expect(createResponse.body.data.createProductionLine.isActive).toBe(true);
 
       const productionLineId = createResponse.body.data.createProductionLine.id;
@@ -852,7 +881,9 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         .expect(200);
 
       expect(updateResponse.body.errors).toBeUndefined();
-      expect(updateResponse.body.data.updateProductionLine.name).toBe('REG-003-ADMIN-TEST-LINE-UPDATED');
+      expect(updateResponse.body.data.updateProductionLine.name).toBe(
+        'REG-003-ADMIN-TEST-LINE-UPDATED',
+      );
 
       console.log('📝 Step 3: ProductionLine name updated successfully');
 
@@ -883,7 +914,9 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
       expect(queriedLine.name).toBe('REG-003-ADMIN-TEST-LINE-UPDATED');
       expect(queriedLine.status).toBe('ACTIVE');
       expect(queriedLine.isActive).toBe(true);
-      expect(new Date(queriedLine.updatedAt).getTime()).toBeGreaterThan(new Date(queriedLine.createdAt).getTime());
+      expect(new Date(queriedLine.updatedAt).getTime()).toBeGreaterThan(
+        new Date(queriedLine.createdAt).getTime(),
+      );
 
       console.log('🔍 Step 4: Query verification successful');
 
@@ -909,7 +942,9 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
         .expect(200);
 
       expect(deactivateResponse.body.errors).toBeUndefined();
-      expect(deactivateResponse.body.data.removeProductionLine.isActive).toBe(false);
+      expect(deactivateResponse.body.data.removeProductionLine.isActive).toBe(
+        false,
+      );
 
       console.log('🚫 Step 5: ProductionLine deactivated successfully');
 
@@ -952,7 +987,9 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
 
       console.log('📋 Step 7: Complete audit trail verified');
 
-      console.log('🎉 REG-003: Full ADMIN user workflow completed successfully');
+      console.log(
+        '🎉 REG-003: Full ADMIN user workflow completed successfully',
+      );
     });
   });
 });

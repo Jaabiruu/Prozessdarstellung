@@ -5,12 +5,16 @@ import {
   HealthCheckError,
 } from '@nestjs/terminus';
 import { PrismaService } from '../database';
+import { CacheService } from '../common/cache/cache.service';
 
 @Injectable()
 export class HealthService extends HealthIndicator {
   private readonly logger = new Logger(HealthService.name);
 
-  constructor(private readonly prismaService: PrismaService) {
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly cacheService: CacheService,
+  ) {
     super();
   }
 
@@ -63,30 +67,70 @@ export class HealthService extends HealthIndicator {
 
   /**
    * Checks the Redis connection health.
-   * TODO: Requires Redis client/service to be injected for real connection testing.
+   * Uses CacheService for actual connectivity testing.
    */
   async checkRedis(): Promise<HealthIndicatorResult> {
     const key = 'redis';
 
-    // TODO: This requires a Redis client/service to be injected.
-    // Example implementation:
-    // try {
-    //   await this.redisService.ping(); // This will throw on failure
-    //   return this.getStatus(key, true);
-    // } catch (error) {
-    //   this.logger.error('Redis health check failed', error.stack);
-    //   throw new HealthCheckError('Redis connection failed', this.getStatus(key, false, {
-    //     message: error.message
-    //   }));
-    // }
+    try {
+      const healthCheck = await this.cacheService.healthCheck();
+      const isHealthy = healthCheck.status === 'healthy';
 
-    const message = 'Redis health check not yet implemented';
-    throw new HealthCheckError(
-      message,
-      this.getStatus(key, false, {
-        reason: 'Implementation pending - Redis client not yet integrated',
-      }),
-    );
+      if (isHealthy) {
+        return this.getStatus(key, true, {
+          ...healthCheck.details,
+        });
+      }
+
+      // Redis is unhealthy - let Terminus handle the proper error response
+      const message = 'Redis connection failed';
+      this.logger.error(message, {
+        status: healthCheck.status,
+        details: healthCheck.details,
+      });
+      throw new HealthCheckError(
+        message,
+        this.getStatus(key, false, {
+          status: healthCheck.status,
+          details: healthCheck.details,
+        }),
+      );
+    } catch (error) {
+      // Handle unexpected errors (not from healthCheck)
+      if (error instanceof HealthCheckError) {
+        throw error; // Re-throw HealthCheckError as-is
+      }
+
+      const message = 'Redis health check failed';
+      this.logger.error(message, error instanceof Error ? error.stack : error);
+      throw new HealthCheckError(
+        message,
+        this.getStatus(key, false, {
+          message: error instanceof Error ? error.message : 'Unknown error',
+        }),
+      );
+    }
+  }
+
+  /**
+   * Gets cache metrics for monitoring.
+   */
+  async getCacheMetrics(): Promise<HealthIndicatorResult> {
+    const key = 'cache';
+
+    try {
+      const metrics = this.cacheService.getMetrics();
+      return this.getStatus(key, true, metrics);
+    } catch (error) {
+      const message = 'Cache metrics retrieval failed';
+      this.logger.error(message, error instanceof Error ? error.stack : error);
+      throw new HealthCheckError(
+        message,
+        this.getStatus(key, false, {
+          message: error instanceof Error ? error.message : 'Unknown error',
+        }),
+      );
+    }
   }
 
   /**

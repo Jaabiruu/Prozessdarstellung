@@ -8,6 +8,13 @@ export interface DatabaseConfig {
 }
 export interface RedisConfig {
     readonly url: string;
+    readonly cache: CacheConfig;
+}
+export interface CacheConfig {
+    readonly defaultTtl: number;
+    readonly maxMemory: string;
+    readonly keyPrefix: string;
+    readonly enabled: boolean;
 }
 export interface ElasticsearchConfig {
     readonly url: string;

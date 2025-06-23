@@ -1,17 +1,25 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
+import { TestSetup } from './setup';
 import { PrismaService } from '../src/database/prisma.service';
 import request from 'supertest';
 
 describe('ProductionLine N+1 Query Prevention (PERF-003)', () => {
   let app: INestApplication;
   let prismaService: PrismaService;
-  let authToken: string;
+  let adminToken: string;
+  let managerToken: string;
+  let operatorToken: string;
+  let adminUserId: string;
+  let managerUserId: string;
+  let operatorUserId: string;
   let queryCount = 0;
   const originalQuery = PrismaService.prototype.$queryRaw;
 
   beforeAll(async () => {
+    await TestSetup.beforeAll();
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -27,35 +35,79 @@ describe('ProductionLine N+1 Query Prevention (PERF-003)', () => {
       return originalQuery.apply(this, args);
     });
 
-    // Login to get auth token
-    const loginResponse = await request(app.getHttpServer())
-      .post('/graphql')
-      .send({
-        query: `
-          mutation {
-            login(input: { email: "admin@pharma.com", password: "SecurePass123!" }) {
-              access_token
-              user {
-                id
-              }
-            }
-          }
-        `,
-      });
-
-    authToken = loginResponse.body.data.login.access_token;
+    // Get authentication tokens and user IDs for different roles
+    await getAuthTokensAndUserIds();
   });
 
   afterAll(async () => {
     // Restore original method
     PrismaService.prototype.$queryRaw = originalQuery;
     await app.close();
+    await TestSetup.afterAll();
   });
 
   beforeEach(() => {
     queryCount = 0;
     jest.clearAllMocks();
   });
+
+  async function getAuthTokensAndUserIds() {
+    const loginMutation = `
+      mutation Login($input: LoginInput!) {
+        login(input: $input) {
+          user {
+            id
+          }
+          accessToken
+        }
+      }
+    `;
+
+    // Get admin token and user ID
+    const adminResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'admin@test.local',
+            password: 'admin123',
+          },
+        },
+      });
+    adminToken = adminResponse.body.data.login.accessToken;
+    adminUserId = adminResponse.body.data.login.user.id;
+
+    // Get manager token and user ID
+    const managerResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'manager@test.local',
+            password: 'manager123',
+          },
+        },
+      });
+    managerToken = managerResponse.body.data.login.accessToken;
+    managerUserId = managerResponse.body.data.login.user.id;
+
+    // Get operator token and user ID
+    const operatorResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'operator@test.local',
+            password: 'operator123',
+          },
+        },
+      });
+    operatorToken = operatorResponse.body.data.login.accessToken;
+    operatorUserId = operatorResponse.body.data.login.user.id;
+  }
 
   describe('PERF-003: N+1 query prevention remains effective', () => {
     it('should fetch multiple production lines with nested processes using exactly 2 queries', async () => {
@@ -66,7 +118,7 @@ describe('ProductionLine N+1 Query Prevention (PERF-003)', () => {
       for (let i = 1; i <= 5; i++) {
         const createLineResponse = await request(app.getHttpServer())
           .post('/graphql')
-          .set('Authorization', `Bearer ${authToken}`)
+          .set('Authorization', `Bearer ${adminToken}`)
           .send({
             query: `
               mutation {
@@ -91,7 +143,7 @@ describe('ProductionLine N+1 Query Prevention (PERF-003)', () => {
         for (let j = 1; j <= 3; j++) {
           await request(app.getHttpServer())
             .post('/graphql')
-            .set('Authorization', `Bearer ${authToken}`)
+            .set('Authorization', `Bearer ${adminToken}`)
             .send({
               query: `
                 mutation {
@@ -115,7 +167,7 @@ describe('ProductionLine N+1 Query Prevention (PERF-003)', () => {
       // Execute the query that should use DataLoader
       const response = await request(app.getHttpServer())
         .post('/graphql')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({
           query: `
             query {
@@ -156,7 +208,7 @@ describe('ProductionLine N+1 Query Prevention (PERF-003)', () => {
       // Create a production line with processes
       const createLineResponse = await request(app.getHttpServer())
         .post('/graphql')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({
           query: `
             mutation {
@@ -177,7 +229,7 @@ describe('ProductionLine N+1 Query Prevention (PERF-003)', () => {
       for (let i = 1; i <= 5; i++) {
         await request(app.getHttpServer())
           .post('/graphql')
-          .set('Authorization', `Bearer ${authToken}`)
+          .set('Authorization', `Bearer ${adminToken}`)
           .send({
             query: `
               mutation {
@@ -200,7 +252,7 @@ describe('ProductionLine N+1 Query Prevention (PERF-003)', () => {
       // Query single production line with nested data
       const response = await request(app.getHttpServer())
         .post('/graphql')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({
           query: `
             query {

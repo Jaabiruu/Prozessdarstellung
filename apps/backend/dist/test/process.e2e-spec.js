@@ -13,19 +13,24 @@ describe('Process Entity CRUD Operations (E2E)', () => {
     let adminToken;
     let managerToken;
     let operatorToken;
+    let adminUserId;
+    let managerUserId;
+    let operatorUserId;
     let testProductionLineId;
     beforeAll(async () => {
+        await setup_1.TestSetup.beforeAll();
         const moduleFixture = await testing_1.Test.createTestingModule({
             imports: [app_module_1.AppModule],
         }).compile();
         app = moduleFixture.createNestApplication();
         await app.init();
         prisma = setup_1.TestSetup.getPrisma();
-        await getAuthTokens();
+        await getAuthTokensAndUserIds();
         await setupTestProductionLine();
     });
     afterAll(async () => {
         await app.close();
+        await setup_1.TestSetup.afterAll();
     });
     beforeEach(async () => {
         await prisma.process.deleteMany({
@@ -36,10 +41,13 @@ describe('Process Entity CRUD Operations (E2E)', () => {
             },
         });
     });
-    async function getAuthTokens() {
+    async function getAuthTokensAndUserIds() {
         const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
+          user {
+            id
+          }
           accessToken
         }
       }
@@ -56,6 +64,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
             },
         });
         adminToken = adminResponse.body.data.login.accessToken;
+        adminUserId = adminResponse.body.data.login.user.id;
         const managerResponse = await (0, supertest_1.default)(app.getHttpServer())
             .post('/graphql')
             .send({
@@ -68,6 +77,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
             },
         });
         managerToken = managerResponse.body.data.login.accessToken;
+        managerUserId = managerResponse.body.data.login.user.id;
         const operatorResponse = await (0, supertest_1.default)(app.getHttpServer())
             .post('/graphql')
             .send({
@@ -80,13 +90,14 @@ describe('Process Entity CRUD Operations (E2E)', () => {
             },
         });
         operatorToken = operatorResponse.body.data.login.accessToken;
+        operatorUserId = operatorResponse.body.data.login.user.id;
     }
     async function setupTestProductionLine() {
         const productionLine = await prisma.productionLine.create({
             data: {
                 name: 'test-production-line-for-processes',
                 status: 'ACTIVE',
-                createdBy: 'test-user-id',
+                createdBy: managerUserId,
                 reason: 'Setup for process tests',
             },
         });
@@ -105,7 +116,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     y: 200.0,
                     color: '#FF0000',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for update test',
                 },
             });
@@ -178,7 +189,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     title: 'test-admin-update-process',
                     description: 'Process for admin update test',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for admin update test',
                 },
             });
@@ -213,7 +224,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     title: 'test-operator-update-process',
                     description: 'Process for operator update test',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for operator update test',
                 },
             });
@@ -282,7 +293,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     title: 'test-manager-rbac-process',
                     description: 'Process for RBAC test',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for RBAC test',
                 },
             });
@@ -326,7 +337,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     title: 'test-operator-denied-process',
                     description: 'Process for RBAC denial test',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for RBAC denial test',
                 },
             });
@@ -363,7 +374,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     title: 'test-duplicate-title',
                     description: 'First process with this title',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for duplicate test',
                 },
             });
@@ -428,7 +439,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     name: 'test-inactive-production-line',
                     status: 'INACTIVE',
                     isActive: false,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for inactive test',
                 },
             });
@@ -468,7 +479,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                         title: `test-query-process-${i}`,
                         description: `Process ${i} for query test`,
                         productionLineId: testProductionLineId,
-                        createdBy: 'test-user-id',
+                        createdBy: managerUserId,
                         reason: `Setup process ${i} for query test`,
                     },
                 });
@@ -504,7 +515,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     title: 'test-pending-process',
                     status: 'PENDING',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup pending process',
                 },
             });
@@ -513,7 +524,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     title: 'test-in-progress-process',
                     status: 'IN_PROGRESS',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup in-progress process',
                 },
             });
@@ -590,7 +601,7 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                     title: 'test-audit-update-process',
                     description: 'Original description',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for audit update test',
                 },
             });
@@ -669,8 +680,11 @@ describe('Process Entity CRUD Operations (E2E)', () => {
                 }),
             ]);
             const responses = [result1, result2];
-            const successCount = responses.filter(r => r.status === 'fulfilled' && r.value.status === 200 && !r.value.body.errors).length;
-            const errorCount = responses.filter(r => (r.status === 'fulfilled' && (r.value.status !== 200 || r.value.body.errors)) ||
+            const successCount = responses.filter(r => r.status === 'fulfilled' &&
+                r.value.status === 200 &&
+                !r.value.body.errors).length;
+            const errorCount = responses.filter(r => (r.status === 'fulfilled' &&
+                (r.value.status !== 200 || r.value.body.errors)) ||
                 r.status === 'rejected').length;
             expect(successCount).toBe(1);
             expect(errorCount).toBe(1);

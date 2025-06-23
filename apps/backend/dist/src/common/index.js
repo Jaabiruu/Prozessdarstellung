@@ -22,4 +22,6 @@ __exportStar(require("./decorators/roles.decorator"), exports);
 __exportStar(require("./decorators/public.decorator"), exports);
 __exportStar(require("./decorators/audit-metadata.decorator"), exports);
 __exportStar(require("./decorators/audit-context.decorator"), exports);
+__exportStar(require("./decorators/trace-operation.decorator"), exports);
+__exportStar(require("./tracing"), exports);
 //# sourceMappingURL=index.js.map

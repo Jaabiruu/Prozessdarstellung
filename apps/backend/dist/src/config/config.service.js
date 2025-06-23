@@ -49,6 +49,12 @@ let ConfigService = class ConfigService {
         if (!this._redis) {
             this._redis = {
                 url: this.configService.getOrThrow('REDIS_URL'),
+                cache: {
+                    defaultTtl: parseInt(this.configService.get('CACHE_DEFAULT_TTL', '3600'), 10),
+                    maxMemory: this.configService.get('CACHE_MAX_MEMORY', '256mb'),
+                    keyPrefix: this.configService.get('CACHE_KEY_PREFIX', 'pharma:'),
+                    enabled: this.configService.get('CACHE_ENABLED', 'true') === 'true',
+                },
             };
         }
         return this._redis;

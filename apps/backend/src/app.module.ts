@@ -3,7 +3,7 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { TerminusModule } from '@nestjs/terminus';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { HealthModule } from './health';
 import { ConfigModule, ConfigService } from './config';
@@ -14,6 +14,9 @@ import { UserModule } from './user';
 import { ProductionLineModule } from './production-line';
 import { ProcessModule } from './process';
 import { DataLoaderModule } from './common/dataloader/dataloader.module';
+import { CacheModule } from './common/cache/cache.module';
+import { TracingModule } from './common/tracing/tracing.module';
+import { TracingInterceptor } from './common/interceptors/tracing.interceptor';
 import { ProductionLineDataLoader } from './common/dataloader/production-line.dataloader';
 import { ProcessDataLoader } from './common/dataloader/process.dataloader';
 import { PrismaService } from './database/prisma.service';
@@ -72,11 +75,17 @@ import { PrismaService } from './database/prisma.service';
     ProductionLineModule,
     ProcessModule,
     DataLoaderModule,
+    CacheModule,
+    TracingModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TracingInterceptor,
     },
     // TODO: Re-enable ThrottlerGuard after resolving dependency injection in testing
     // {

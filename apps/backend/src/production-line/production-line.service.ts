@@ -4,8 +4,10 @@ import {
   ConflictException,
   Logger,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { CacheService } from '../common/cache/cache.service';
 import { CreateProductionLineInput } from './dto/create-production-line.input';
 import { UpdateProductionLineInput } from './dto/update-production-line.input';
 import { ProductionLine, ProductionLineStatus, Prisma } from '@prisma/client';
@@ -18,6 +20,8 @@ export class ProductionLineService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly cacheService: CacheService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(
@@ -65,6 +69,12 @@ export class ProductionLineService {
           createdBy: currentUserId,
         });
 
+        // Emit event for cache invalidation
+        this.eventEmitter.emit('productionLine.created', {
+          id: productionLine.id,
+          name: productionLine.name,
+        });
+
         return productionLine;
       });
     } catch (error) {
@@ -91,37 +101,52 @@ export class ProductionLineService {
     status?: ProductionLineStatus;
   }): Promise<ProductionLine[]> {
     try {
-      const productionLines = await this.prisma.productionLine.findMany({
-        where: {
-          ...(options?.isActive !== undefined && {
-            isActive: options.isActive,
-          }),
-          ...(options?.status && { status: options.status }),
-        },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              role: true,
-            },
-          },
-          _count: {
-            select: {
-              processes: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        take: options?.limit || 100,
-        skip: options?.offset || 0,
-      });
+      // Create cache key based on options
+      const cacheKey = `production-lines:${JSON.stringify(options || {})}`;
 
-      return productionLines;
+      return await this.cacheService.getOrSet(
+        cacheKey,
+        async () => {
+          const productionLines = await this.prisma.productionLine.findMany({
+            where: {
+              ...(options?.isActive !== undefined && {
+                isActive: options.isActive,
+              }),
+              ...(options?.status && { status: options.status }),
+            },
+            include: {
+              creator: {
+                select: {
+                  id: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                },
+              },
+              _count: {
+                select: {
+                  processes: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: options?.limit || 100,
+            skip: options?.offset || 0,
+          });
+
+          this.logger.debug(
+            `Fetched ${productionLines.length} production lines from database`,
+          );
+          return productionLines;
+        },
+        {
+          ttl: 1800, // 30 minutes for list queries
+          tags: ['production-line'],
+        },
+      );
     } catch (error) {
       this.logger.error('Failed to fetch production lines', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -132,43 +157,57 @@ export class ProductionLineService {
 
   async findOne(id: string): Promise<ProductionLine> {
     try {
-      const productionLine = await this.prisma.productionLine.findUnique({
-        where: { id },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              role: true,
+      const cacheKey = `production-line:${id}`;
+
+      return await this.cacheService.getOrSet(
+        cacheKey,
+        async () => {
+          const productionLine = await this.prisma.productionLine.findUnique({
+            where: { id },
+            include: {
+              creator: {
+                select: {
+                  id: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                },
+              },
+              processes: {
+                select: {
+                  id: true,
+                  title: true,
+                  status: true,
+                  progress: true,
+                  createdAt: true,
+                },
+                orderBy: {
+                  createdAt: 'desc',
+                },
+              },
+              _count: {
+                select: {
+                  processes: true,
+                },
+              },
             },
-          },
-          processes: {
-            select: {
-              id: true,
-              title: true,
-              status: true,
-              progress: true,
-              createdAt: true,
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-          },
-          _count: {
-            select: {
-              processes: true,
-            },
-          },
+          });
+
+          if (!productionLine) {
+            throw new NotFoundException(
+              `Production line with ID ${id} not found`,
+            );
+          }
+
+          this.logger.debug(`Fetched production line ${id} from database`);
+          return productionLine;
         },
-      });
-
-      if (!productionLine) {
-        throw new NotFoundException(`Production line with ID ${id} not found`);
-      }
-
-      return productionLine;
+        {
+          ttl: 3600, // 1 hour for individual items
+          tags: ['production-line', `production-line:${id}`],
+        },
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -242,6 +281,12 @@ export class ProductionLineService {
           productionLineId: productionLine.id,
           updatedBy: currentUserId,
           changes: Object.keys(updateData),
+        });
+
+        // Emit event for cache invalidation
+        this.eventEmitter.emit('productionLine.updated', {
+          id: productionLine.id,
+          changes: updateData,
         });
 
         return productionLine;
@@ -331,6 +376,12 @@ export class ProductionLineService {
         this.logger.log('Production line deactivated successfully', {
           productionLineId: productionLine.id,
           deactivatedBy: currentUserId,
+        });
+
+        // Emit event for cache invalidation
+        this.eventEmitter.emit('productionLine.deleted', {
+          id: productionLine.id,
+          action: 'deactivation',
         });
 
         return productionLine;

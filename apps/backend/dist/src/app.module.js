@@ -22,6 +22,9 @@ const user_1 = require("./user");
 const production_line_1 = require("./production-line");
 const process_1 = require("./process");
 const dataloader_module_1 = require("./common/dataloader/dataloader.module");
+const cache_module_1 = require("./common/cache/cache.module");
+const tracing_module_1 = require("./common/tracing/tracing.module");
+const tracing_interceptor_1 = require("./common/interceptors/tracing.interceptor");
 const production_line_dataloader_1 = require("./common/dataloader/production-line.dataloader");
 const process_dataloader_1 = require("./common/dataloader/process.dataloader");
 const prisma_service_1 = require("./database/prisma.service");
@@ -75,11 +78,17 @@ exports.AppModule = AppModule = __decorate([
             production_line_1.ProductionLineModule,
             process_1.ProcessModule,
             dataloader_module_1.DataLoaderModule,
+            cache_module_1.CacheModule,
+            tracing_module_1.TracingModule,
         ],
         providers: [
             {
                 provide: core_1.APP_GUARD,
                 useClass: auth_1.JwtAuthGuard,
+            },
+            {
+                provide: core_1.APP_INTERCEPTOR,
+                useClass: tracing_interceptor_1.TracingInterceptor,
             },
         ],
     })

@@ -13,13 +13,16 @@ exports.HealthController = void 0;
 const common_1 = require("@nestjs/common");
 const terminus_1 = require("@nestjs/terminus");
 const health_service_1 = require("./health.service");
+const cache_warming_service_1 = require("../common/cache/cache-warming.service");
 const public_decorator_1 = require("../common/decorators/public.decorator");
 let HealthController = class HealthController {
     health;
     healthService;
-    constructor(health, healthService) {
+    cacheWarmingService;
+    constructor(health, healthService, cacheWarmingService) {
         this.health = health;
         this.healthService = healthService;
+        this.cacheWarmingService = cacheWarmingService;
     }
     check() {
         return this.health.check([
@@ -40,6 +43,12 @@ let HealthController = class HealthController {
             timestamp: new Date().toISOString(),
             service: 'pharmaceutical-backend',
         };
+    }
+    cacheMetrics() {
+        return this.health.check([() => this.healthService.getCacheMetrics()]);
+    }
+    async warmCache() {
+        return await this.cacheWarmingService.manualWarm();
     }
 };
 exports.HealthController = HealthController;
@@ -63,10 +72,24 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], HealthController.prototype, "liveness", null);
+__decorate([
+    (0, common_1.Get)('cache/metrics'),
+    (0, terminus_1.HealthCheck)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], HealthController.prototype, "cacheMetrics", null);
+__decorate([
+    (0, common_1.Post)('cache/warm'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], HealthController.prototype, "warmCache", null);
 exports.HealthController = HealthController = __decorate([
     (0, common_1.Controller)('health'),
     (0, public_decorator_1.Public)(),
     __metadata("design:paramtypes", [terminus_1.HealthCheckService,
-        health_service_1.HealthService])
+        health_service_1.HealthService,
+        cache_warming_service_1.CacheWarmingService])
 ], HealthController);
 //# sourceMappingURL=health.controller.js.map

@@ -1,6 +1,7 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post } from '@nestjs/common';
 import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
 import { HealthService } from './health.service';
+import { CacheWarmingService } from '../common/cache/cache-warming.service';
 import { Public } from '../common/decorators/public.decorator';
 
 @Controller('health')
@@ -9,6 +10,7 @@ export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly healthService: HealthService,
+    private readonly cacheWarmingService: CacheWarmingService,
   ) {}
 
   @Get()
@@ -37,5 +39,16 @@ export class HealthController {
       timestamp: new Date().toISOString(),
       service: 'pharmaceutical-backend',
     };
+  }
+
+  @Get('cache/metrics')
+  @HealthCheck()
+  cacheMetrics() {
+    return this.health.check([() => this.healthService.getCacheMetrics()]);
+  }
+
+  @Post('cache/warm')
+  async warmCache() {
+    return await this.cacheWarmingService.manualWarm();
   }
 }

@@ -4,11 +4,13 @@ const core_1 = require("@nestjs/core");
 const common_1 = require("@nestjs/common");
 const app_module_1 = require("./app.module");
 const config_1 = require("./config");
+const tracing_1 = require("./common/tracing");
 async function bootstrap() {
     const logger = new common_1.Logger('Bootstrap');
     try {
         const app = await core_1.NestFactory.create(app_module_1.AppModule);
         const configService = app.get(config_1.ConfigService);
+        const tracingService = app.get(tracing_1.TracingService);
         app.useGlobalPipes(new common_1.ValidationPipe({
             whitelist: true,
             forbidNonWhitelisted: true,
@@ -27,6 +29,7 @@ async function bootstrap() {
         logger.log(`📊 GraphQL Playground: http://localhost:${port}/graphql`);
         logger.log(`🏥 Health Check: http://localhost:${port}/health`);
         logger.log(`🌍 Environment: ${configService.nodeEnv}`);
+        logger.log(`📡 OpenTelemetry tracing enabled`);
     }
     catch (error) {
         logger.error('Failed to start application', error);

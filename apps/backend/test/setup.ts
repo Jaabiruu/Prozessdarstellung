@@ -12,11 +12,11 @@ const redis = new Redis(process.env['REDIS_URL'] || 'redis://localhost:6379/1');
 export class TestSetup {
   static async beforeAll(): Promise<void> {
     try {
-      // Reset the test database
-      await this.resetDatabase();
-
       // Clear Redis test database
       await redis.flushdb();
+
+      // Always ensure test users exist (upsert handles duplicates safely)
+      await this.seedTestDatabase();
 
       console.log('✅ Test environment setup completed');
     } catch (error) {
@@ -30,9 +30,13 @@ export class TestSetup {
       // Clean up test data
       await this.cleanupDatabase();
 
-      // Close connections
+      // Close connections safely
       await prisma.$disconnect();
-      await redis.quit();
+
+      // Only quit Redis if connection is still open
+      if (redis.status === 'ready' || redis.status === 'connect') {
+        await redis.quit();
+      }
 
       console.log('✅ Test environment cleanup completed');
     } catch (error) {
@@ -80,8 +84,26 @@ export class TestSetup {
   private static async cleanupTestData(): Promise<void> {
     // Remove only test data (keep seed data)
     // Delete in proper order to respect foreign key constraints
-    
-    // First, delete audit logs that reference test users
+
+    // First, delete processes (they reference production lines)
+    await prisma.process.deleteMany({
+      where: {
+        title: {
+          contains: 'test-',
+        },
+      },
+    });
+
+    // Then delete production lines (they reference users via createdBy)
+    await prisma.productionLine.deleteMany({
+      where: {
+        name: {
+          contains: 'test-',
+        },
+      },
+    });
+
+    // Then delete audit logs that reference test users
     await prisma.auditLog.deleteMany({
       where: {
         OR: [
@@ -94,12 +116,27 @@ export class TestSetup {
       },
     });
 
-    // Then delete test users
+    // Finally delete test users (but NOT the seeded users)
     await prisma.user.deleteMany({
       where: {
-        email: {
-          contains: 'test',
-        },
+        AND: [
+          {
+            email: {
+              contains: 'test',
+            },
+          },
+          {
+            email: {
+              not: {
+                in: [
+                  'admin@test.local',
+                  'manager@test.local',
+                  'operator@test.local',
+                ],
+              },
+            },
+          },
+        ],
       },
     });
   }
@@ -107,49 +144,78 @@ export class TestSetup {
   private static async seedTestDatabase(): Promise<void> {
     const bcrypt = await import('bcrypt');
 
-    // Create test admin user
-    await prisma.user.upsert({
-      where: { email: 'admin@test.local' },
-      update: {},
-      create: {
-        email: 'admin@test.local',
-        password: await bcrypt.hash('admin123', 12),
-        firstName: 'Test',
-        lastName: 'Admin',
-        role: 'ADMIN',
-        isActive: true,
-      },
-    });
+    try {
+      // Use transaction to ensure atomicity and handle race conditions
+      await prisma.$transaction(async tx => {
+        // Create test admin user
+        await tx.user.upsert({
+          where: { email: 'admin@test.local' },
+          update: {},
+          create: {
+            email: 'admin@test.local',
+            password: await bcrypt.hash('admin123', 12),
+            firstName: 'Test',
+            lastName: 'Admin',
+            role: 'ADMIN',
+            isActive: true,
+          },
+        });
 
-    // Create test manager user
-    await prisma.user.upsert({
-      where: { email: 'manager@test.local' },
-      update: {},
-      create: {
-        email: 'manager@test.local',
-        password: await bcrypt.hash('manager123', 12),
-        firstName: 'Test',
-        lastName: 'Manager',
-        role: 'MANAGER',
-        isActive: true,
-      },
-    });
+        // Create test manager user
+        await tx.user.upsert({
+          where: { email: 'manager@test.local' },
+          update: {},
+          create: {
+            email: 'manager@test.local',
+            password: await bcrypt.hash('manager123', 12),
+            firstName: 'Test',
+            lastName: 'Manager',
+            role: 'MANAGER',
+            isActive: true,
+          },
+        });
 
-    // Create test operator user
-    await prisma.user.upsert({
-      where: { email: 'operator@test.local' },
-      update: {},
-      create: {
-        email: 'operator@test.local',
-        password: await bcrypt.hash('operator123', 12),
-        firstName: 'Test',
-        lastName: 'Operator',
-        role: 'OPERATOR',
-        isActive: true,
-      },
-    });
+        // Create test operator user
+        await tx.user.upsert({
+          where: { email: 'operator@test.local' },
+          update: {},
+          create: {
+            email: 'operator@test.local',
+            password: await bcrypt.hash('operator123', 12),
+            firstName: 'Test',
+            lastName: 'Operator',
+            role: 'OPERATOR',
+            isActive: true,
+          },
+        });
 
-    console.log('✅ Test database seeded with test users');
+        // Create inactive user for testing deactivated account
+        await tx.user.upsert({
+          where: { email: 'deactivated@test.local' },
+          update: {},
+          create: {
+            email: 'deactivated@test.local',
+            password: await bcrypt.hash('deactivated123', 12),
+            firstName: 'Test',
+            lastName: 'Deactivated',
+            role: 'OPERATOR',
+            isActive: false,
+          },
+        });
+      });
+
+      console.log('✅ Test database seeded with test users');
+    } catch (error) {
+      // Ignore duplicate key errors - users already exist
+      if (
+        error instanceof Error &&
+        error.message.includes('Unique constraint')
+      ) {
+        console.log('✅ Test users already exist, skipping seed');
+      } else {
+        throw error;
+      }
+    }
   }
 
   static getPrisma(): PrismaClient {

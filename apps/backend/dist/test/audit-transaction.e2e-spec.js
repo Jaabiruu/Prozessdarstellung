@@ -11,10 +11,16 @@ const audit_service_1 = require("../src/audit/audit.service");
 describe('Audit Trail & Transaction Tests (E2E)', () => {
     let app;
     let prisma;
+    let adminToken;
     let managerToken;
+    let operatorToken;
+    let adminUserId;
+    let managerUserId;
+    let operatorUserId;
     let testProductionLineId;
     let auditService;
     beforeAll(async () => {
+        await setup_1.TestSetup.beforeAll();
         const moduleFixture = await testing_1.Test.createTestingModule({
             imports: [app_module_1.AppModule],
         }).compile();
@@ -22,12 +28,13 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
         await app.init();
         prisma = setup_1.TestSetup.getPrisma();
         auditService = moduleFixture.get(audit_service_1.AuditService);
-        await getAuthToken();
+        await getAuthTokensAndUserIds();
         await setupTestData();
     });
     afterAll(async () => {
         await cleanupTestData();
         await app.close();
+        await setup_1.TestSetup.afterAll();
     });
     beforeEach(async () => {
         await prisma.auditLog.deleteMany({
@@ -39,15 +46,31 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
             },
         });
     });
-    async function getAuthToken() {
+    async function getAuthTokensAndUserIds() {
         const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
+          user {
+            id
+          }
           accessToken
         }
       }
     `;
-        const response = await (0, supertest_1.default)(app.getHttpServer())
+        const adminResponse = await (0, supertest_1.default)(app.getHttpServer())
+            .post('/graphql')
+            .send({
+            query: loginMutation,
+            variables: {
+                input: {
+                    email: 'admin@test.local',
+                    password: 'admin123',
+                },
+            },
+        });
+        adminToken = adminResponse.body.data.login.accessToken;
+        adminUserId = adminResponse.body.data.login.user.id;
+        const managerResponse = await (0, supertest_1.default)(app.getHttpServer())
             .post('/graphql')
             .send({
             query: loginMutation,
@@ -58,14 +81,28 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
                 },
             },
         });
-        managerToken = response.body.data.login.accessToken;
+        managerToken = managerResponse.body.data.login.accessToken;
+        managerUserId = managerResponse.body.data.login.user.id;
+        const operatorResponse = await (0, supertest_1.default)(app.getHttpServer())
+            .post('/graphql')
+            .send({
+            query: loginMutation,
+            variables: {
+                input: {
+                    email: 'operator@test.local',
+                    password: 'operator123',
+                },
+            },
+        });
+        operatorToken = operatorResponse.body.data.login.accessToken;
+        operatorUserId = operatorResponse.body.data.login.user.id;
     }
     async function setupTestData() {
         const productionLine = await prisma.productionLine.create({
             data: {
                 name: 'audit-test-production-line',
                 status: 'ACTIVE',
-                createdBy: 'test-user-id',
+                createdBy: managerUserId,
                 reason: 'Setup for audit tests',
             },
         });
@@ -145,7 +182,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
                     status: 'PENDING',
                     progress: 0.0,
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for audit update test',
                 },
             });
@@ -264,7 +301,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
                     status: 'PENDING',
                     progress: 0.0,
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for rollback test',
                 },
             });
@@ -281,7 +318,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
                 description: 'this-should-not-persist',
                 status: 'IN_PROGRESS',
                 reason: 'Testing transaction rollback',
-            }, 'test-user-id', '192.168.1.1', 'test-client')).rejects.toThrow('Simulated audit service failure');
+            }, managerUserId, '192.168.1.1', 'test-client')).rejects.toThrow('Simulated audit service failure');
             auditService.create = originalCreate;
             const unchangedProcess = await prisma.process.findUnique({
                 where: { id: process.id },
@@ -311,7 +348,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
                 name: 'audit-test-should-not-exist',
                 status: 'ACTIVE',
                 reason: 'Testing creation rollback',
-            }, 'test-user-id', '192.168.1.1', 'test-client')).rejects.toThrow('Audit failure during creation');
+            }, managerUserId, '192.168.1.1', 'test-client')).rejects.toThrow('Audit failure during creation');
             auditService.create = originalCreate;
             const nonExistentLine = await prisma.productionLine.findFirst({
                 where: {
@@ -328,7 +365,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
                     description: 'Testing partial failure scenarios',
                     status: 'PENDING',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for partial failure test',
                 },
             });
@@ -349,7 +386,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
                 title: 'partial-failure-test',
                 description: 'This should not persist due to transaction rollback',
                 reason: 'Testing partial failure',
-            }, 'test-user-id', '192.168.1.1', 'test-client')).rejects.toThrow();
+            }, managerUserId, '192.168.1.1', 'test-client')).rejects.toThrow();
             auditService.create = originalCreate;
             const unchangedProcess = await prisma.process.findUnique({
                 where: { id: process.id },
@@ -407,7 +444,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
                     description: 'Testing concurrent update scenarios',
                     status: 'PENDING',
                     productionLineId: testProductionLineId,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Setup for concurrency test',
                 },
             });

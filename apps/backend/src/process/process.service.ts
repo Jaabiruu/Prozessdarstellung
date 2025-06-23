@@ -5,8 +5,10 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { CacheService } from '../common/cache/cache.service';
 import { CreateProcessInput } from './dto/create-process.input';
 import { UpdateProcessInput } from './dto/update-process.input';
 import { Process, ProcessStatus, Prisma } from '@prisma/client';
@@ -19,6 +21,8 @@ export class ProcessService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly cacheService: CacheService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(
@@ -92,6 +96,13 @@ export class ProcessService {
           createdBy: currentUserId,
         });
 
+        // Emit event for cache invalidation
+        this.eventEmitter.emit('process.created', {
+          id: process.id,
+          title: process.title,
+          productionLineId: process.productionLineId,
+        });
+
         return process;
       });
     } catch (error) {
@@ -119,43 +130,62 @@ export class ProcessService {
     productionLineId?: string;
   }): Promise<Process[]> {
     try {
-      const processes = await this.prisma.process.findMany({
-        where: {
-          ...(options?.isActive !== undefined && {
-            isActive: options.isActive,
-          }),
-          ...(options?.status && { status: options.status }),
-          ...(options?.productionLineId && {
-            productionLineId: options.productionLineId,
-          }),
-        },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              role: true,
-            },
-          },
-          productionLine: {
-            select: {
-              id: true,
-              name: true,
-              status: true,
-              isActive: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        take: options?.limit || 100,
-        skip: options?.offset || 0,
-      });
+      // Create cache key based on options
+      const cacheKey = options?.productionLineId
+        ? `processes:line:${options.productionLineId}:${JSON.stringify(options)}`
+        : `processes:${JSON.stringify(options || {})}`;
 
-      return processes;
+      return await this.cacheService.getOrSet(
+        cacheKey,
+        async () => {
+          const processes = await this.prisma.process.findMany({
+            where: {
+              ...(options?.isActive !== undefined && {
+                isActive: options.isActive,
+              }),
+              ...(options?.status && { status: options.status }),
+              ...(options?.productionLineId && {
+                productionLineId: options.productionLineId,
+              }),
+            },
+            include: {
+              creator: {
+                select: {
+                  id: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                },
+              },
+              productionLine: {
+                select: {
+                  id: true,
+                  name: true,
+                  status: true,
+                  isActive: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: options?.limit || 100,
+            skip: options?.offset || 0,
+          });
+
+          this.logger.debug(
+            `Fetched ${processes.length} processes from database`,
+          );
+          return processes;
+        },
+        {
+          ttl: 1800, // 30 minutes for list queries
+          tags: options?.productionLineId
+            ? ['process', `processes:line:${options.productionLineId}`]
+            : ['process'],
+        },
+      );
     } catch (error) {
       this.logger.error('Failed to fetch processes', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -166,34 +196,46 @@ export class ProcessService {
 
   async findOne(id: string): Promise<Process> {
     try {
-      const process = await this.prisma.process.findUnique({
-        where: { id },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              role: true,
+      const cacheKey = `process:${id}`;
+
+      return await this.cacheService.getOrSet(
+        cacheKey,
+        async () => {
+          const process = await this.prisma.process.findUnique({
+            where: { id },
+            include: {
+              creator: {
+                select: {
+                  id: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                },
+              },
+              productionLine: {
+                select: {
+                  id: true,
+                  name: true,
+                  status: true,
+                  isActive: true,
+                },
+              },
             },
-          },
-          productionLine: {
-            select: {
-              id: true,
-              name: true,
-              status: true,
-              isActive: true,
-            },
-          },
+          });
+
+          if (!process) {
+            throw new NotFoundException(`Process with ID ${id} not found`);
+          }
+
+          this.logger.debug(`Fetched process ${id} from database`);
+          return process;
         },
-      });
-
-      if (!process) {
-        throw new NotFoundException(`Process with ID ${id} not found`);
-      }
-
-      return process;
+        {
+          ttl: 3600, // 1 hour for individual items
+          tags: ['process', `process:${id}`],
+        },
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -292,6 +334,13 @@ export class ProcessService {
           changes: Object.keys(updateData),
         });
 
+        // Emit event for cache invalidation
+        this.eventEmitter.emit('process.updated', {
+          id: process.id,
+          productionLineId: process.productionLineId,
+          changes: updateData,
+        });
+
         return process;
       });
     } catch (error) {
@@ -358,6 +407,13 @@ export class ProcessService {
         this.logger.log('Process deactivated successfully', {
           processId: process.id,
           deactivatedBy: currentUserId,
+        });
+
+        // Emit event for cache invalidation
+        this.eventEmitter.emit('process.deleted', {
+          id: process.id,
+          productionLineId: process.productionLineId,
+          action: 'deactivation',
         });
 
         return process;

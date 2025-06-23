@@ -5,6 +5,7 @@ import {
   AppConfig,
   DatabaseConfig,
   RedisConfig,
+  CacheConfig,
   ElasticsearchConfig,
   JwtConfig,
   NodeEnv,
@@ -64,6 +65,22 @@ export class ConfigService implements ApplicationConfiguration {
     if (!this._redis) {
       this._redis = {
         url: this.configService.getOrThrow<string>('REDIS_URL'),
+        cache: {
+          defaultTtl: parseInt(
+            this.configService.get<string>('CACHE_DEFAULT_TTL', '3600'),
+            10,
+          ), // 1 hour default
+          maxMemory: this.configService.get<string>(
+            'CACHE_MAX_MEMORY',
+            '256mb',
+          ),
+          keyPrefix: this.configService.get<string>(
+            'CACHE_KEY_PREFIX',
+            'pharma:',
+          ),
+          enabled:
+            this.configService.get<string>('CACHE_ENABLED', 'true') === 'true',
+        },
       };
     }
     return this._redis;

@@ -6,3 +6,5 @@ export * from './decorators/roles.decorator';
 export * from './decorators/public.decorator';
 export * from './decorators/audit-metadata.decorator';
 export * from './decorators/audit-context.decorator';
+export * from './decorators/trace-operation.decorator';
+export * from './tracing';

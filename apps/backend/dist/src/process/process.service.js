@@ -12,17 +12,23 @@ var ProcessService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProcessService = void 0;
 const common_1 = require("@nestjs/common");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_service_1 = require("../database/prisma.service");
 const audit_service_1 = require("../audit/audit.service");
+const cache_service_1 = require("../common/cache/cache.service");
 const client_1 = require("@prisma/client");
 const user_role_enum_1 = require("../common/enums/user-role.enum");
 let ProcessService = ProcessService_1 = class ProcessService {
     prisma;
     auditService;
+    cacheService;
+    eventEmitter;
     logger = new common_1.Logger(ProcessService_1.name);
-    constructor(prisma, auditService) {
+    constructor(prisma, auditService, cacheService, eventEmitter) {
         this.prisma = prisma;
         this.auditService = auditService;
+        this.cacheService = cacheService;
+        this.eventEmitter = eventEmitter;
     }
     async create(createProcessInput, currentUserId, ipAddress, userAgent) {
         try {
@@ -76,6 +82,11 @@ let ProcessService = ProcessService_1 = class ProcessService {
                     productionLineId: process.productionLineId,
                     createdBy: currentUserId,
                 });
+                this.eventEmitter.emit('process.created', {
+                    id: process.id,
+                    title: process.title,
+                    productionLineId: process.productionLineId,
+                });
                 return process;
             });
         }
@@ -93,42 +104,53 @@ let ProcessService = ProcessService_1 = class ProcessService {
     }
     async findAll(options) {
         try {
-            const processes = await this.prisma.process.findMany({
-                where: {
-                    ...(options?.isActive !== undefined && {
-                        isActive: options.isActive,
-                    }),
-                    ...(options?.status && { status: options.status }),
-                    ...(options?.productionLineId && {
-                        productionLineId: options.productionLineId,
-                    }),
-                },
-                include: {
-                    creator: {
-                        select: {
-                            id: true,
-                            email: true,
-                            firstName: true,
-                            lastName: true,
-                            role: true,
+            const cacheKey = options?.productionLineId
+                ? `processes:line:${options.productionLineId}:${JSON.stringify(options)}`
+                : `processes:${JSON.stringify(options || {})}`;
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                const processes = await this.prisma.process.findMany({
+                    where: {
+                        ...(options?.isActive !== undefined && {
+                            isActive: options.isActive,
+                        }),
+                        ...(options?.status && { status: options.status }),
+                        ...(options?.productionLineId && {
+                            productionLineId: options.productionLineId,
+                        }),
+                    },
+                    include: {
+                        creator: {
+                            select: {
+                                id: true,
+                                email: true,
+                                firstName: true,
+                                lastName: true,
+                                role: true,
+                            },
+                        },
+                        productionLine: {
+                            select: {
+                                id: true,
+                                name: true,
+                                status: true,
+                                isActive: true,
+                            },
                         },
                     },
-                    productionLine: {
-                        select: {
-                            id: true,
-                            name: true,
-                            status: true,
-                            isActive: true,
-                        },
+                    orderBy: {
+                        createdAt: 'desc',
                     },
-                },
-                orderBy: {
-                    createdAt: 'desc',
-                },
-                take: options?.limit || 100,
-                skip: options?.offset || 0,
+                    take: options?.limit || 100,
+                    skip: options?.offset || 0,
+                });
+                this.logger.debug(`Fetched ${processes.length} processes from database`);
+                return processes;
+            }, {
+                ttl: 1800,
+                tags: options?.productionLineId
+                    ? ['process', `processes:line:${options.productionLineId}`]
+                    : ['process'],
             });
-            return processes;
         }
         catch (error) {
             this.logger.error('Failed to fetch processes', {
@@ -139,32 +161,39 @@ let ProcessService = ProcessService_1 = class ProcessService {
     }
     async findOne(id) {
         try {
-            const process = await this.prisma.process.findUnique({
-                where: { id },
-                include: {
-                    creator: {
-                        select: {
-                            id: true,
-                            email: true,
-                            firstName: true,
-                            lastName: true,
-                            role: true,
+            const cacheKey = `process:${id}`;
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                const process = await this.prisma.process.findUnique({
+                    where: { id },
+                    include: {
+                        creator: {
+                            select: {
+                                id: true,
+                                email: true,
+                                firstName: true,
+                                lastName: true,
+                                role: true,
+                            },
+                        },
+                        productionLine: {
+                            select: {
+                                id: true,
+                                name: true,
+                                status: true,
+                                isActive: true,
+                            },
                         },
                     },
-                    productionLine: {
-                        select: {
-                            id: true,
-                            name: true,
-                            status: true,
-                            isActive: true,
-                        },
-                    },
-                },
+                });
+                if (!process) {
+                    throw new common_1.NotFoundException(`Process with ID ${id} not found`);
+                }
+                this.logger.debug(`Fetched process ${id} from database`);
+                return process;
+            }, {
+                ttl: 3600,
+                tags: ['process', `process:${id}`],
             });
-            if (!process) {
-                throw new common_1.NotFoundException(`Process with ID ${id} not found`);
-            }
-            return process;
         }
         catch (error) {
             if (error instanceof common_1.NotFoundException) {
@@ -242,6 +271,11 @@ let ProcessService = ProcessService_1 = class ProcessService {
                     updatedBy: currentUserId,
                     changes: Object.keys(updateData),
                 });
+                this.eventEmitter.emit('process.updated', {
+                    id: process.id,
+                    productionLineId: process.productionLineId,
+                    changes: updateData,
+                });
                 return process;
             });
         }
@@ -290,6 +324,11 @@ let ProcessService = ProcessService_1 = class ProcessService {
                     processId: process.id,
                     deactivatedBy: currentUserId,
                 });
+                this.eventEmitter.emit('process.deleted', {
+                    id: process.id,
+                    productionLineId: process.productionLineId,
+                    action: 'deactivation',
+                });
                 return process;
             });
         }
@@ -306,6 +345,8 @@ exports.ProcessService = ProcessService;
 exports.ProcessService = ProcessService = ProcessService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        audit_service_1.AuditService])
+        audit_service_1.AuditService,
+        cache_service_1.CacheService,
+        event_emitter_1.EventEmitter2])
 ], ProcessService);
 //# sourceMappingURL=process.service.js.map

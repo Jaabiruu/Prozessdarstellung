@@ -12,17 +12,23 @@ var ProductionLineService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductionLineService = void 0;
 const common_1 = require("@nestjs/common");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_service_1 = require("../database/prisma.service");
 const audit_service_1 = require("../audit/audit.service");
+const cache_service_1 = require("../common/cache/cache.service");
 const client_1 = require("@prisma/client");
 const user_role_enum_1 = require("../common/enums/user-role.enum");
 let ProductionLineService = ProductionLineService_1 = class ProductionLineService {
     prisma;
     auditService;
+    cacheService;
+    eventEmitter;
     logger = new common_1.Logger(ProductionLineService_1.name);
-    constructor(prisma, auditService) {
+    constructor(prisma, auditService, cacheService, eventEmitter) {
         this.prisma = prisma;
         this.auditService = auditService;
+        this.cacheService = cacheService;
+        this.eventEmitter = eventEmitter;
     }
     async create(createProductionLineInput, currentUserId, ipAddress, userAgent) {
         try {
@@ -55,6 +61,10 @@ let ProductionLineService = ProductionLineService_1 = class ProductionLineServic
                     status: productionLine.status,
                     createdBy: currentUserId,
                 });
+                this.eventEmitter.emit('productionLine.created', {
+                    id: productionLine.id,
+                    name: productionLine.name,
+                });
                 return productionLine;
             });
         }
@@ -72,36 +82,43 @@ let ProductionLineService = ProductionLineService_1 = class ProductionLineServic
     }
     async findAll(options) {
         try {
-            const productionLines = await this.prisma.productionLine.findMany({
-                where: {
-                    ...(options?.isActive !== undefined && {
-                        isActive: options.isActive,
-                    }),
-                    ...(options?.status && { status: options.status }),
-                },
-                include: {
-                    creator: {
-                        select: {
-                            id: true,
-                            email: true,
-                            firstName: true,
-                            lastName: true,
-                            role: true,
+            const cacheKey = `production-lines:${JSON.stringify(options || {})}`;
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                const productionLines = await this.prisma.productionLine.findMany({
+                    where: {
+                        ...(options?.isActive !== undefined && {
+                            isActive: options.isActive,
+                        }),
+                        ...(options?.status && { status: options.status }),
+                    },
+                    include: {
+                        creator: {
+                            select: {
+                                id: true,
+                                email: true,
+                                firstName: true,
+                                lastName: true,
+                                role: true,
+                            },
+                        },
+                        _count: {
+                            select: {
+                                processes: true,
+                            },
                         },
                     },
-                    _count: {
-                        select: {
-                            processes: true,
-                        },
+                    orderBy: {
+                        createdAt: 'desc',
                     },
-                },
-                orderBy: {
-                    createdAt: 'desc',
-                },
-                take: options?.limit || 100,
-                skip: options?.offset || 0,
+                    take: options?.limit || 100,
+                    skip: options?.offset || 0,
+                });
+                this.logger.debug(`Fetched ${productionLines.length} production lines from database`);
+                return productionLines;
+            }, {
+                ttl: 1800,
+                tags: ['production-line'],
             });
-            return productionLines;
         }
         catch (error) {
             this.logger.error('Failed to fetch production lines', {
@@ -112,41 +129,48 @@ let ProductionLineService = ProductionLineService_1 = class ProductionLineServic
     }
     async findOne(id) {
         try {
-            const productionLine = await this.prisma.productionLine.findUnique({
-                where: { id },
-                include: {
-                    creator: {
-                        select: {
-                            id: true,
-                            email: true,
-                            firstName: true,
-                            lastName: true,
-                            role: true,
+            const cacheKey = `production-line:${id}`;
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                const productionLine = await this.prisma.productionLine.findUnique({
+                    where: { id },
+                    include: {
+                        creator: {
+                            select: {
+                                id: true,
+                                email: true,
+                                firstName: true,
+                                lastName: true,
+                                role: true,
+                            },
+                        },
+                        processes: {
+                            select: {
+                                id: true,
+                                title: true,
+                                status: true,
+                                progress: true,
+                                createdAt: true,
+                            },
+                            orderBy: {
+                                createdAt: 'desc',
+                            },
+                        },
+                        _count: {
+                            select: {
+                                processes: true,
+                            },
                         },
                     },
-                    processes: {
-                        select: {
-                            id: true,
-                            title: true,
-                            status: true,
-                            progress: true,
-                            createdAt: true,
-                        },
-                        orderBy: {
-                            createdAt: 'desc',
-                        },
-                    },
-                    _count: {
-                        select: {
-                            processes: true,
-                        },
-                    },
-                },
+                });
+                if (!productionLine) {
+                    throw new common_1.NotFoundException(`Production line with ID ${id} not found`);
+                }
+                this.logger.debug(`Fetched production line ${id} from database`);
+                return productionLine;
+            }, {
+                ttl: 3600,
+                tags: ['production-line', `production-line:${id}`],
             });
-            if (!productionLine) {
-                throw new common_1.NotFoundException(`Production line with ID ${id} not found`);
-            }
-            return productionLine;
         }
         catch (error) {
             if (error instanceof common_1.NotFoundException) {
@@ -199,6 +223,10 @@ let ProductionLineService = ProductionLineService_1 = class ProductionLineServic
                     productionLineId: productionLine.id,
                     updatedBy: currentUserId,
                     changes: Object.keys(updateData),
+                });
+                this.eventEmitter.emit('productionLine.updated', {
+                    id: productionLine.id,
+                    changes: updateData,
                 });
                 return productionLine;
             });
@@ -262,6 +290,10 @@ let ProductionLineService = ProductionLineService_1 = class ProductionLineServic
                     productionLineId: productionLine.id,
                     deactivatedBy: currentUserId,
                 });
+                this.eventEmitter.emit('productionLine.deleted', {
+                    id: productionLine.id,
+                    action: 'deactivation',
+                });
                 return productionLine;
             });
         }
@@ -278,6 +310,8 @@ exports.ProductionLineService = ProductionLineService;
 exports.ProductionLineService = ProductionLineService = ProductionLineService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        audit_service_1.AuditService])
+        audit_service_1.AuditService,
+        cache_service_1.CacheService,
+        event_emitter_1.EventEmitter2])
 ], ProductionLineService);
 //# sourceMappingURL=production-line.service.js.map

@@ -11,8 +11,13 @@ export const AuditContext = createParamDecorator(
     const ctx = GqlExecutionContext.create(context);
     const request = ctx.getContext().req;
 
+    // Extract IP with X-Forwarded-For support
+    const forwardedFor = request?.get('X-Forwarded-For');
+    const ipAddress =
+      forwardedFor?.split(',')[0]?.trim() || request?.ip || null;
+
     return {
-      ipAddress: request?.ip || null,
+      ipAddress,
       userAgent: request?.get('user-agent') || null,
     };
   },

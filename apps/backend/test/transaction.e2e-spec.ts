@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { TestSetup } from './setup';
 import { PrismaService } from '../src/database/prisma.service';
 import { ProductionLineService } from '../src/production-line/production-line.service';
 import { ProcessService } from '../src/process/process.service';
@@ -17,9 +19,16 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
   let userService: UserService;
   let auditService: AuditService;
   let authService: AuthService;
-  let testUserId: string;
+  let adminToken: string;
+  let managerToken: string;
+  let operatorToken: string;
+  let adminUserId: string;
+  let managerUserId: string;
+  let operatorUserId: string;
 
   beforeAll(async () => {
+    await TestSetup.beforeAll();
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -27,7 +36,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
 
-    prisma = moduleFixture.get<PrismaService>(PrismaService);
+    prisma = TestSetup.getPrisma();
     productionLineService = moduleFixture.get<ProductionLineService>(
       ProductionLineService,
     );
@@ -36,45 +45,77 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
     auditService = moduleFixture.get<AuditService>(AuditService);
     authService = moduleFixture.get<AuthService>(AuthService);
 
-    // Create test user for transaction tests
-    const testUser = await userService.create(
-      {
-        email: 'transaction-test@example.com',
-        password: 'TestPassword123!',
-        firstName: 'Transaction',
-        lastName: 'Test',
-        role: UserRole.ADMIN,
-        reason: 'Transaction test user creation',
-      },
-      'test-user-id',
-      '127.0.0.1',
-      'test-agent',
-    );
-
-    testUserId = testUser.id;
+    // Get authentication tokens and user IDs for different roles
+    await getAuthTokensAndUserIds();
   });
 
   afterAll(async () => {
-    // Cleanup test data
-    try {
-      await prisma.auditLog.deleteMany({ where: { userId: testUserId } });
-      await prisma.process.deleteMany({});
-      await prisma.productionLine.deleteMany({});
-      await prisma.user.deleteMany({
-        where: { email: 'transaction-test@example.com' },
-      });
-    } catch (error) {
-      console.warn('Cleanup error:', error);
-    } finally {
-      await prisma.$disconnect();
-      await app.close();
-    }
+    await app.close();
+    await TestSetup.afterAll();
   });
 
   afterEach(async () => {
     // Restore any mocked methods after each test
     jest.restoreAllMocks();
   });
+
+  async function getAuthTokensAndUserIds() {
+    const loginMutation = `
+      mutation Login($input: LoginInput!) {
+        login(input: $input) {
+          user {
+            id
+          }
+          accessToken
+        }
+      }
+    `;
+
+    // Get admin token and user ID
+    const adminResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'admin@test.local',
+            password: 'admin123',
+          },
+        },
+      });
+    adminToken = adminResponse.body.data.login.accessToken;
+    adminUserId = adminResponse.body.data.login.user.id;
+
+    // Get manager token and user ID
+    const managerResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'manager@test.local',
+            password: 'manager123',
+          },
+        },
+      });
+    managerToken = managerResponse.body.data.login.accessToken;
+    managerUserId = managerResponse.body.data.login.user.id;
+
+    // Get operator token and user ID
+    const operatorResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'operator@test.local',
+            password: 'operator123',
+          },
+        },
+      });
+    operatorToken = operatorResponse.body.data.login.accessToken;
+    operatorUserId = operatorResponse.body.data.login.user.id;
+  }
 
   // ATOM-001: Transaction Rollback on Audit Failure
   describe('ATOM-001: Transaction Rollback on Audit Failure', () => {
@@ -93,7 +134,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
             name: 'ROLLBACK_TEST_LINE',
             reason: 'Test line for rollback',
           },
-          testUserId,
+          adminUserId,
           '127.0.0.1',
           'test-agent',
         );
@@ -132,7 +173,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
           name: 'SERVICE_FAILURE_TEST',
           reason: 'Test line for service failure',
         },
-        testUserId,
+        adminUserId,
         '127.0.0.1',
         'test-agent',
       );
@@ -153,7 +194,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
             status: 'IN_PROGRESS',
             progress: 0,
           },
-          testUserId,
+          adminUserId,
           '127.0.0.1',
           'test-agent',
         );
@@ -180,7 +221,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
       await productionLineService.remove(
         productionLine.id,
         'Test cleanup',
-        testUserId,
+        adminUserId,
       );
     });
   });
@@ -196,7 +237,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
           name: 'ATOMIC_SUCCESS_TEST',
           reason: 'Test for successful atomic creation',
         },
-        testUserId,
+        adminUserId,
         '127.0.0.1',
         'test-agent',
       );
@@ -223,7 +264,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
       });
 
       expect(auditLog).toBeDefined();
-      expect(auditLog!.userId).toBe(testUserId);
+      expect(auditLog!.userId).toBe(adminUserId);
       expect(auditLog!.ipAddress).toBe('127.0.0.1');
       expect(auditLog!.userAgent).toBe('test-agent');
 
@@ -247,7 +288,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
           name: 'TRANSACTION_TEST',
           reason: 'Transaction management test',
         },
-        testUserId,
+        adminUserId,
         '127.0.0.1',
         'test-agent',
       );
@@ -269,7 +310,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
           name: 'MULTI_OP_TEST_LINE',
           reason: 'Testing multi-operation transaction integrity',
         },
-        testUserId,
+        adminUserId,
         '127.0.0.1',
         'test-agent',
       );
@@ -283,7 +324,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
           status: 'IN_PROGRESS',
           progress: 50,
         },
-        testUserId,
+        adminUserId,
         '127.0.0.1',
         'test-agent',
       );
@@ -322,7 +363,7 @@ describe('Cross-Cutting Transaction Management (E2E)', () => {
       await productionLineService.remove(
         productionLine.id,
         'Test cleanup',
-        testUserId,
+        adminUserId,
       );
     });
   });

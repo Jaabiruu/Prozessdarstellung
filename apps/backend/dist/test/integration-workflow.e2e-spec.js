@@ -10,19 +10,25 @@ const supertest_1 = __importDefault(require("supertest"));
 describe('Integration & End-to-End Workflow Tests (E2E)', () => {
     let app;
     let prisma;
+    let adminToken;
     let managerToken;
     let operatorToken;
+    let adminUserId;
+    let managerUserId;
+    let operatorUserId;
     beforeAll(async () => {
+        await setup_1.TestSetup.beforeAll();
         const moduleFixture = await testing_1.Test.createTestingModule({
             imports: [app_module_1.AppModule],
         }).compile();
         app = moduleFixture.createNestApplication();
         await app.init();
         prisma = setup_1.TestSetup.getPrisma();
-        await getAuthTokens();
+        await getAuthTokensAndUserIds();
     });
     afterAll(async () => {
         await app.close();
+        await setup_1.TestSetup.afterAll();
     });
     beforeEach(async () => {
         await prisma.process.deleteMany({
@@ -36,14 +42,30 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
             },
         });
     });
-    async function getAuthTokens() {
+    async function getAuthTokensAndUserIds() {
         const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
+          user {
+            id
+          }
           accessToken
         }
       }
     `;
+        const adminResponse = await (0, supertest_1.default)(app.getHttpServer())
+            .post('/graphql')
+            .send({
+            query: loginMutation,
+            variables: {
+                input: {
+                    email: 'admin@test.local',
+                    password: 'admin123',
+                },
+            },
+        });
+        adminToken = adminResponse.body.data.login.accessToken;
+        adminUserId = adminResponse.body.data.login.user.id;
         const managerResponse = await (0, supertest_1.default)(app.getHttpServer())
             .post('/graphql')
             .send({
@@ -56,6 +78,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
             },
         });
         managerToken = managerResponse.body.data.login.accessToken;
+        managerUserId = managerResponse.body.data.login.user.id;
         const operatorResponse = await (0, supertest_1.default)(app.getHttpServer())
             .post('/graphql')
             .send({
@@ -68,6 +91,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
             },
         });
         operatorToken = operatorResponse.body.data.login.accessToken;
+        operatorUserId = operatorResponse.body.data.login.user.id;
     }
     describe('Complete Business Workflow: Create ProductionLine → Add Processes → Update → Deactivate', () => {
         it('should execute complete pharmaceutical production workflow successfully', async () => {
@@ -411,7 +435,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
                 data: {
                     name: 'workflow-test-cascade-protection',
                     status: 'ACTIVE',
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Testing cascade protection',
                 },
             });
@@ -420,7 +444,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
                     title: 'workflow-test-cascade-process',
                     description: 'Process for cascade testing',
                     productionLineId: productionLine.id,
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Testing cascade relationships',
                 },
             });
@@ -493,7 +517,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
                     data: {
                         name: `workflow-test-pagination-${i.toString().padStart(2, '0')}`,
                         status: 'ACTIVE',
-                        createdBy: 'test-user-id',
+                        createdBy: managerUserId,
                         reason: `Pagination test ${i}`,
                     },
                 });
@@ -535,7 +559,7 @@ describe('Integration & End-to-End Workflow Tests (E2E)', () => {
                 data: {
                     name: 'workflow-test-load-consistency',
                     status: 'ACTIVE',
-                    createdBy: 'test-user-id',
+                    createdBy: managerUserId,
                     reason: 'Load testing',
                 },
             });

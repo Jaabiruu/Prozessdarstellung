@@ -9,11 +9,18 @@ import { PrismaClient } from '@prisma/client';
 describe('Audit Trail & Transaction Tests (E2E)', () => {
   let app: INestApplication;
   let prisma: PrismaClient;
+  let adminToken: string;
   let managerToken: string;
+  let operatorToken: string;
+  let adminUserId: string;
+  let managerUserId: string;
+  let operatorUserId: string;
   let testProductionLineId: string;
   let auditService: AuditService;
 
   beforeAll(async () => {
+    await TestSetup.beforeAll();
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -24,14 +31,15 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
     prisma = TestSetup.getPrisma();
     auditService = moduleFixture.get<AuditService>(AuditService);
 
-    // Get authentication token and setup test data
-    await getAuthToken();
+    // Get authentication tokens and user IDs, then setup test data
+    await getAuthTokensAndUserIds();
     await setupTestData();
   });
 
   afterAll(async () => {
     await cleanupTestData();
     await app.close();
+    await TestSetup.afterAll();
   });
 
   beforeEach(async () => {
@@ -46,16 +54,35 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
     });
   });
 
-  async function getAuthToken() {
+  async function getAuthTokensAndUserIds() {
     const loginMutation = `
       mutation Login($input: LoginInput!) {
         login(input: $input) {
+          user {
+            id
+          }
           accessToken
         }
       }
     `;
 
-    const response = await request(app.getHttpServer())
+    // Get admin token and user ID
+    const adminResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'admin@test.local',
+            password: 'admin123',
+          },
+        },
+      });
+    adminToken = adminResponse.body.data.login.accessToken;
+    adminUserId = adminResponse.body.data.login.user.id;
+
+    // Get manager token and user ID
+    const managerResponse = await request(app.getHttpServer())
       .post('/graphql')
       .send({
         query: loginMutation,
@@ -66,7 +93,23 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
           },
         },
       });
-    managerToken = response.body.data.login.accessToken;
+    managerToken = managerResponse.body.data.login.accessToken;
+    managerUserId = managerResponse.body.data.login.user.id;
+
+    // Get operator token and user ID
+    const operatorResponse = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: loginMutation,
+        variables: {
+          input: {
+            email: 'operator@test.local',
+            password: 'operator123',
+          },
+        },
+      });
+    operatorToken = operatorResponse.body.data.login.accessToken;
+    operatorUserId = operatorResponse.body.data.login.user.id;
   }
 
   async function setupTestData() {
@@ -75,7 +118,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
       data: {
         name: 'audit-test-production-line',
         status: 'ACTIVE',
-        createdBy: 'test-user-id',
+        createdBy: managerUserId,
         reason: 'Setup for audit tests',
       },
     });
@@ -177,7 +220,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
           status: 'PENDING',
           progress: 0.0,
           productionLineId: testProductionLineId,
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Setup for audit update test',
         },
       });
@@ -323,7 +366,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
           status: 'PENDING',
           progress: 0.0,
           productionLineId: testProductionLineId,
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Setup for rollback test',
         },
       });
@@ -352,7 +395,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
             status: 'IN_PROGRESS',
             reason: 'Testing transaction rollback',
           },
-          'test-user-id',
+          managerUserId,
           '192.168.1.1',
           'test-client',
         ),
@@ -405,7 +448,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
             status: 'ACTIVE',
             reason: 'Testing creation rollback',
           },
-          'test-user-id',
+          managerUserId,
           '192.168.1.1',
           'test-client',
         ),
@@ -436,7 +479,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
           description: 'Testing partial failure scenarios',
           status: 'PENDING',
           productionLineId: testProductionLineId,
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Setup for partial failure test',
         },
       });
@@ -467,7 +510,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
             description: 'This should not persist due to transaction rollback',
             reason: 'Testing partial failure',
           },
-          'test-user-id',
+          managerUserId,
           '192.168.1.1',
           'test-client',
         ),
@@ -553,7 +596,7 @@ describe('Audit Trail & Transaction Tests (E2E)', () => {
           description: 'Testing concurrent update scenarios',
           status: 'PENDING',
           productionLineId: testProductionLineId,
-          createdBy: 'test-user-id',
+          createdBy: managerUserId,
           reason: 'Setup for concurrency test',
         },
       });
