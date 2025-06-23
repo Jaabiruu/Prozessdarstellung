@@ -8,24 +8,16 @@ AI assistance rules and current status for pharmaceutical production management 
 **Progress**: 40% Phase 1-4 complete + Pillars 1-4 COMPLETE + Type Safety COMPLETE + Test Refactoring COMPLETE = 80% total
 
 ## 🎯 IMMEDIATE NEXT ACTIONS
-1. **🔧 PRIORITY**: Authentication fixes in test suite - 86/89 tests failing, structure working perfectly
-2. **📋 READY**: Phase 5 Performance & Scalability - Redis caching, monitoring, audit archiving
+1. **📋 WORKFLOW**: Check todos/ folder for active work OR identify next subtask from COMPREHENSIVE_REBUILD_TODO.md
+2. **📋 READY**: Phase 5.1 Caching Layer (per COMPREHENSIVE_REBUILD_TODO.md) - Redis integration implementation
 3. **✅ COMPLETE**: Test Suite Refactoring - Feature-based structure implemented, pillar/phase files removed
 4. **✅ COMPLETE**: All architectural refactoring (Pillars 1-4) - 65/65 tasks + 27 `any` warnings fixed
 
 ## ✅ COMPLETED FOUNDATION
-**Phase 1-4 Complete**: Database, Authentication, Audit, User Management, Production Entities ready  
-**Compliance Verified**: GxP standards, security, rate limiting, E2E tests complete  
-**Production Ready**: ProductionLine & Process services with GraphQL API and DataLoader optimization  
-**Testing Complete**: 5 comprehensive test suites covering all Phase 4 functionality (30+ test cases)  
-**Pillar 1 Complete**: All transaction atomicity patterns implemented (18/18 tasks) - auditService.withTransaction() eliminated  
-**Pillar 2 Complete**: Performance optimizations done (11/11 tasks) - processCount field resolver optimized, redundant queries eliminated  
-**Pillar 3 Complete**: Architecture & SRP enforced (14/14 tasks) - @AuditContext() decorator created, cross-entity methods removed, audit logging centralized  
-**Pillar 4 Complete**: Type Safety achieved (15/15 tasks) - All `any` types eliminated from core application, 27 warnings fixed (9 strategic test-only `any` remain)  
-**Test Suite Refactoring Complete**: Feature-based test organization implemented - ARCH-001/002/003 + REG-003 tests added, pillar/phase files removed, ALL IMPLEMENTATION COMPLETE  
-**Infrastructure**: ✅ Dependencies resolved - dataloader 2.2.3 installed, build/typecheck passing, zero compilation errors  
-**Archived**: ✅ ARCHITECTURAL_REFACTORING_TODO.md and PILLAR_4_TYPE_SAFETY_TODO.md moved to `archived_md/todos/`  
-**Details**: See `archived_md/PHASE_*_COMPLETE.md` and `docs/PROJECT_STATUS.md`
+**Foundation**: Phase 1-4 complete with enterprise architecture, authentication, audit trails, and production entities  
+**Architecture**: Pillars 1-4 complete - atomicity, performance, SRP, and type safety all implemented  
+**Test Suite**: Feature-based organization working perfectly with 10 test files and enterprise compliance  
+**Details**: See `docs/PROJECT_STATUS.md` for complete progress tracking
 
 ## 📋 TODO & ARCHIVAL MANAGEMENT RULES
 
@@ -87,19 +79,19 @@ AI assistance rules and current status for pharmaceutical production management 
 **DataLoader**: Check context.dataloaders for N+1 prevention
 
 ## 📍 Current Context
-**Current Priority**: 🔧 Authentication fixes in test suite - see `todos/TEST_SUITE_AUTHENTICATION_FIXES_TODO.md`  
-**Next Task**: 📋 Phase 5 Performance & Scalability - see `COMPREHENSIVE_REBUILD_TODO.md`  
-**Completed**: ✅ Test Suite Refactoring - feature-based structure working perfectly (10 test files, enterprise-compliant)  
-**Test Status**: 3/89 tests passing (structure sound, authentication credentials need fixing)
+**Workflow**: Check todos/ folder for active work, or reference COMPREHENSIVE_REBUILD_TODO.md for next subtask  
+**Next Ready**: Phase 5.1 Caching Layer (Redis integration) - see `COMPREHENSIVE_REBUILD_TODO.md`  
+**Completed**: ✅ Test Suite Refactoring - feature-based structure implemented (10 test files, enterprise-compliant)  
+**AI Instruction**: Create detailed TODO files for COMPREHENSIVE_REBUILD_TODO.md subtasks when needed and get user approval
 
 ## 📁 FILE STRUCTURE
 - **CLAUDE.md**: Current AI context (this file)
 - **README.md**: Project overview and setup
-- **COMPREHENSIVE_REBUILD_TODO.md**: Implementation details
+- **COMPREHENSIVE_REBUILD_TODO.md**: **SINGLE SOURCE OF TRUTH** for all implementation phases
 - **docs**: Enterprise standards and project status
-- **todos**: Active TODO files for phases >2 tasks (currently: TEST_SUITE_AUTHENTICATION_FIXES_TODO.md)
+- **todos**: Active TODO files or empty (AI creates TODOs from COMPREHENSIVE_REBUILD_TODO.md when needed)
 - **archived_md**: Completed phases and historical documentation
 
 ---
 
-**Last Updated**: December 23, 2024 - Test suite refactoring COMPLETE - authentication fixes needed, then ready for Phase 5
+**Last Updated**: December 23, 2024 - Generalized AI handoff workflow - COMPREHENSIVE_REBUILD_TODO.md is single source of truth

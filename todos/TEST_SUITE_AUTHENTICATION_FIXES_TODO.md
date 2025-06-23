@@ -1,8 +1,11 @@
 # 🔧 TEST SUITE AUTHENTICATION FIXES TODO
 
+**🚨 AI INSTRUCTION**: This is the CURRENT PRIORITY for immediate execution  
+
 **Created**: December 23, 2024  
-**Priority**: MEDIUM - Fix authentication issues in refactored test suite  
-**Status**: PENDING - Implementation required  
+**Priority**: HIGH - Current priority for new AI instances  
+**Status**: READY FOR EXECUTION - Start with Phase 1 authentication debugging  
+**Estimated Time**: 2-3 hours  
 
 ## 📋 Executive Summary
 
@@ -37,9 +40,9 @@ Tests:       86 failed, 3 passed, 89 total
 
 ## 🎯 DETAILED FIXING PLAN
 
-### **Phase 1: Authentication Debugging**
+### **⚡ START HERE: Phase 1 Authentication Debugging**
 - [ ] **A1.1**: Investigate credential expectations vs seeded data
-- [ ] **A1.2**: Review test user creation in setup.ts vs test expectations
+- [ ] **A1.2**: Review test user creation in setup.ts vs test expectations  
 - [ ] **A1.3**: Check for test isolation issues between test runs
 - [ ] **A1.4**: Verify bcrypt hashing consistency
 
